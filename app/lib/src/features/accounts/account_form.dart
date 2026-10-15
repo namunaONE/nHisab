@@ -80,7 +80,7 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
                 decoration: const InputDecoration(
                     labelText: 'Name * e.g. Cash, Machhapuchhre Bank')),
             DropdownButtonFormField<String>(
-              value: type,
+              initialValue: type,
               decoration: const InputDecoration(labelText: 'Type *'),
               items: const [
                 DropdownMenuItem(value: 'cash', child: Text('Cash')),

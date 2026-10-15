@@ -48,7 +48,7 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<String>(
-              value: kind,
+              initialValue: kind,
               decoration: const InputDecoration(labelText: 'Kind *'),
               items: const [
                 DropdownMenuItem(value: 'income', child: Text('Income')),

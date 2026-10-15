@@ -70,7 +70,7 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('Parties error: $e'),
                 data: (list) => DropdownButtonFormField<String>(
-                  value: partyId,
+                  initialValue: partyId,
                   hint: const Text('Party *'),
                   items: list.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))).toList(),
                   onChanged: (v) => setState(() => partyId = v),
@@ -82,14 +82,14 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
                 Expanded(child: TextField(controller: ratePct, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Rate % annual * e.g. 18'))),
               ]),
               Row(children: [
-                Expanded(child: DropdownButtonFormField<String>(value: direction, items: const [DropdownMenuItem(value: 'receivable', child: Text('Lent out')), DropdownMenuItem(value: 'payable', child: Text('Borrowed'))], onChanged: (v) => setState(() => direction = v!))),
+                Expanded(child: DropdownButtonFormField<String>(initialValue: direction, items: const [DropdownMenuItem(value: 'receivable', child: Text('Lent out')), DropdownMenuItem(value: 'payable', child: Text('Borrowed'))], onChanged: (v) => setState(() => direction = v!))),
                 const SizedBox(width: 8),
-                Expanded(child: DropdownButtonFormField<String>(value: method, items: const [DropdownMenuItem(value: 'daily_accrual', child: Text('Daily accrual')), DropdownMenuItem(value: 'reducing_balance', child: Text('EMI reducing'))], onChanged: (v) => setState(() => method = v!))),
+                Expanded(child: DropdownButtonFormField<String>(initialValue: method, items: const [DropdownMenuItem(value: 'daily_accrual', child: Text('Daily accrual')), DropdownMenuItem(value: 'reducing_balance', child: Text('EMI reducing'))], onChanged: (v) => setState(() => method = v!))),
               ]),
               Row(children: [
-                Expanded(child: DropdownButtonFormField<int>(value: dayBase, items: const [DropdownMenuItem(value: 360, child: Text('360 banker')), DropdownMenuItem(value: 365, child: Text('365 actual'))], onChanged: (v) => setState(() => dayBase = v!))),
+                Expanded(child: DropdownButtonFormField<int>(initialValue: dayBase, items: const [DropdownMenuItem(value: 360, child: Text('360 banker')), DropdownMenuItem(value: 365, child: Text('365 actual'))], onChanged: (v) => setState(() => dayBase = v!))),
                 const SizedBox(width: 8),
-                Expanded(child: DropdownButtonFormField<String>(value: loanType, items: const [DropdownMenuItem(value: 'personal', child: Text('Personal')), DropdownMenuItem(value: 'business', child: Text('Business')), DropdownMenuItem(value: 'home', child: Text('Home')), DropdownMenuItem(value: 'vehicle', child: Text('Vehicle')), DropdownMenuItem(value: 'cash_credit', child: Text('Cash Credit')), DropdownMenuItem(value: 'demand', child: Text('Demand'))], onChanged: (v) => setState(() => loanType = v!))),
+                Expanded(child: DropdownButtonFormField<String>(initialValue: loanType, items: const [DropdownMenuItem(value: 'personal', child: Text('Personal')), DropdownMenuItem(value: 'business', child: Text('Business')), DropdownMenuItem(value: 'home', child: Text('Home')), DropdownMenuItem(value: 'vehicle', child: Text('Vehicle')), DropdownMenuItem(value: 'cash_credit', child: Text('Cash Credit')), DropdownMenuItem(value: 'demand', child: Text('Demand'))], onChanged: (v) => setState(() => loanType = v!))),
               ]),
               Row(children: [
                 Text('Start: ${startDate.year}/${startDate.month}/${startDate.day}'),

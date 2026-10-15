@@ -152,7 +152,7 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
               loading: () => const LinearProgressIndicator(),
               error: (e, _) => Text('Loans error: $e'),
               data: (list) => DropdownButtonFormField<String>(
-                value: loanId,
+                initialValue: loanId,
                 hint: const Text('Loan *'),
                 items: list.map((l) => DropdownMenuItem(value: l.id, child: Text('${l.partyName} - ${l.principal.toStringAsFixed(0)}'))).toList(),
                 onChanged: (v) { setState(() => loanId = v); updatePreview(); },
@@ -162,7 +162,7 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
               loading: () => const SizedBox.shrink(),
               error: (e, _) => Text('Wallets error: $e'),
               data: (list) => DropdownButtonFormField<String>(
-                value: accountId,
+                initialValue: accountId,
                 hint: const Text('Wallet (links to cashflow)'),
                 items: list.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
                 onChanged: (v) => setState(() => accountId = v),
@@ -170,7 +170,7 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
             ),
             TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount Rs *'), onChanged: (_) => updatePreview()),
             DropdownButtonFormField<String>(
-              value: method,
+              initialValue: method,
               items: const [DropdownMenuItem(value: 'cash', child: Text('Cash')), DropdownMenuItem(value: 'bank_transfer', child: Text('Bank transfer')), DropdownMenuItem(value: 'cheque', child: Text('Cheque')), DropdownMenuItem(value: 'online', child: Text('Online'))],
               onChanged: (v) => setState(() => method = v!),
             ),

@@ -13,7 +13,7 @@ const supaAnon = String.fromEnvironment('SUPABASE_ANON_KEY',
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(url: supaUrl, anonKey: supaAnon);
+  await Supabase.initialize(url: supaUrl, publishableKey: supaAnon);
   runApp(const ProviderScope(child: NHisabApp()));
 }
 

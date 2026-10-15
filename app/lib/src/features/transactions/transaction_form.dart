@@ -114,7 +114,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('Wallets error: $e'),
                 data: (list) => DropdownButtonFormField<String>(
-                  value: accountId,
+                  initialValue: accountId,
                   hint: Text(kind == 'transfer'
                       ? 'From wallet *'
                       : 'Wallet *'),
@@ -131,7 +131,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
                   loading: () => const SizedBox.shrink(),
                   error: (e, _) => Text('Wallets error: $e'),
                   data: (list) => DropdownButtonFormField<String>(
-                    value: toAccountId,
+                    initialValue: toAccountId,
                     hint: const Text('To wallet *'),
                     items: list
                         .map((a) => DropdownMenuItem(
@@ -148,7 +148,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
                     final filtered =
                         list.where((c) => c.kind == kind).toList();
                     return DropdownButtonFormField<String>(
-                      value: categoryId,
+                      initialValue: categoryId,
                       hint: const Text('Category *'),
                       items: filtered
                           .map((c) => DropdownMenuItem(

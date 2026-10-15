@@ -65,7 +65,7 @@ class _BudgetFormDialogState extends ConsumerState<BudgetFormDialog> {
                 final exp =
                     list.where((c) => c.kind == 'expense').toList();
                 return DropdownButtonFormField<String>(
-                  value: categoryId,
+                  initialValue: categoryId,
                   hint: const Text('Expense category *'),
                   items: exp
                       .map((c) => DropdownMenuItem(
