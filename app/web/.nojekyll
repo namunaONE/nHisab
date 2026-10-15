@@ -1,0 +1,4 @@
+# Empty: disables Jekyll on GitHub Pages so Flutter files starting with
+# underscore (e.g. canvaskit, .well-known) are served as-is.
+# CI also runs `touch build/web/.nojekyll` on every deploy, so the deployed
+# artifact always contains this marker even if `flutter build` skips dotfiles.

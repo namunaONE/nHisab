@@ -1,0 +1,25 @@
+# 12 - Gaps Fix Log
+
+Date opened 2026-10-15 from docs audit 01-11 vs code + DB 21/21/0/0/0/0 rows + migrations 20261015065947/55.
+
+## P0
+- [x] 03 stale versions: fixed to Flutter 3.47.5/Dart 3.13.4/PG17/actual deps, removed freezed/mocktail/exports bucket claims.
+- [x] 04 missing future-day + payment sum bug + flat hidden + status: documented and code fixed 2026-10-15.
+- [x] 07 unusable path: rewrote to app/ existing project, no local supabase folder noted, seed duplicate warning.
+- [x] 01 success overstated: marked PASS/PARTIAL/FAIL per item.
+- [x] 02 actual vs planned split: done.
+- [x] Code 2026-10-15 (no Firebase): PaymentForm prevInterestPaid now sums payments.interest_amount per loan for preview + save. deleted_at added to 6 tables via 20261015073715, providers filter deleted_at is null, archive buttons on ledger/parties/payments set deleted_at. Import seed21 aborts when loans/parties not empty. supabase/migrations exported 3 files + README. Verified analyze 0 errors 8 infos, test 2/2, build/web success. Firebase skipped per request.
+
+## P1
+- [x] Export supabase db to supabase/migrations + Import seed count guard (done). Firebase skipped (Pages locked). .env.example added as app/.env.example 2026-10-15.
+- [x] Pages CI analyze/test/build via .github/workflows/pages.yml (base /nhisab/, 404 + .nojekyll).
+- [ ] docs/api-reference: PostgREST selects per provider + RLS need.
+- [ ] Runbook backup/restore, rate fix, duplicate cleanup, key rotation, Vault pg_net.
+- [ ] Staging/prod project split.
+
+## P2
+- [x] Budget tracker v1: accounts/categories/transactions/budgets schema + RLS + seed (3/8/0/0), CRUD forms, spent rollup, loan-txn link, dashboard fl_chart 6-month + donut, full Excel workbook + PDF summary, Decimal-exact Money core (10/10 tests), RLS 10/10 verified + rls_check.sql, idx_txns_loan fix. Remaining: EMI schedule UI + flat compare, party statement, audit_logs writer + UI, bell tray + cron + Edge deploy.
+- [ ] UX empty/error/loading, DataTable 1400 mobile scroll strategy recorded, contrast check secondary on white result.
+- [ ] ERD + sequence diagrams, glossary, party naming A/B canonical, changelog + owners.
+
+Verify: flutter analyze 0 errors 15 infos (value-deprecation pattern), test 10/10, build/web success, RLS 10/10 + security 0.

@@ -1,0 +1,70 @@
+name: Deploy Flutter Web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Install deps
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test calculator
+        run: flutter test test/loan_calculator_test.dart
+
+      - name: Build web for Pages
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          if [[ "$REPO" == *".github.io" ]]; then BASE="/"; else BASE="/$REPO/"; fi
+          echo "Base href: $BASE"
+          ARGS="--release --base-href=$BASE --no-wasm-dry-run"
+          if [ -n "${{ secrets.SUPABASE_URL }}" ]; then ARGS="$ARGS --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}"; fi
+          if [ -n "${{ secrets.SUPABASE_ANON_KEY }}" ]; then ARGS="$ARGS --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}"; fi
+          # shellcheck disable=SC2086
+          flutter build web $ARGS
+          cp build/web/index.html build/web/404.html
+          touch build/web/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
