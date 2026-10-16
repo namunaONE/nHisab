@@ -27,7 +27,9 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 56, color: scheme.onSurfaceVariant),
+            ExcludeSemantics(
+              child: Icon(icon, size: 56, color: scheme.onSurfaceVariant),
+            ),
             const SizedBox(height: 16),
             Text(
               title,
@@ -82,7 +84,9 @@ class ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: scheme.error),
+            ExcludeSemantics(
+              child: Icon(Icons.error_outline, size: 48, color: scheme.error),
+            ),
             const SizedBox(height: 12),
             Text(
               'Something went wrong',

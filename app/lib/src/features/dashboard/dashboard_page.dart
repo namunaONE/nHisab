@@ -222,7 +222,9 @@ class DashboardPage extends ConsumerWidget {
                       const SizedBox(height: 16),
                       SizedBox(
                         height: 200,
-                        child: BarChart(
+                        child: Semantics(
+                          label: 'Cashflow bar chart: income vs expense over last 6 months',
+                          child: BarChart(
                           BarChartData(
                             maxY: peak * 1.2 + 1,
                             titlesData: FlTitlesData(
@@ -292,7 +294,8 @@ class DashboardPage extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                    ),
+                    const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -449,12 +452,15 @@ class DashboardPage extends ConsumerWidget {
                             // Donut chart
                             Expanded(
                               flex: 2,
-                              child: PieChart(
-                                PieChartData(
-                                  sections: sections,
-                                  centerSpaceRadius: 34,
-                                  sectionsSpace: 4,
-                                  startDegreeOffset: -90,
+                              child: Semantics(
+                                label: 'Budget donut chart: spending limits vs spent by category',
+                                child: PieChart(
+                                  PieChartData(
+                                    sections: sections,
+                                    centerSpaceRadius: 34,
+                                    sectionsSpace: 4,
+                                    startDegreeOffset: -90,
+                                  ),
                                 ),
                               ),
                             ),

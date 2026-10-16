@@ -247,7 +247,7 @@ class AppTheme {
       style: IconButton.styleFrom(
         foregroundColor: scheme.onSurfaceVariant,
         iconSize: 20,
-        minimumSize: const Size(40, 40),
+        minimumSize: const Size(48, 48),
         padding: EdgeInsets.zero,
       ),
     );
