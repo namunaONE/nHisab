@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/skeleton.dart';
 import '../accounts/accounts_provider.dart';
@@ -104,6 +105,10 @@ class TransactionsPage extends ConsumerWidget {
                       .update({
                     'deleted_at': DateTime.now().toIso8601String()
                   }).eq('id', t.id);
+                  await AuditLog.write(
+                      table: 'transactions',
+                      rowId: t.id,
+                      action: 'archive');
                   ref.invalidate(transactionsProvider);
                   ref.invalidate(accountsProvider);
                 },

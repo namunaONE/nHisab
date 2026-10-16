@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import 'categories_provider.dart';
 
 class CategoryFormDialog extends ConsumerStatefulWidget {
@@ -50,9 +51,17 @@ class _CategoryFormDialogState extends ConsumerState<CategoryFormDialog> {
       error = null;
     });
     try {
-      await Supabase.instance.client
+      final data = {'kind': kind, 'name': name.text.trim()};
+      final row = await Supabase.instance.client
           .from('categories')
-          .insert({'kind': kind, 'name': name.text.trim()});
+          .insert(data)
+          .select('id')
+          .single();
+      await AuditLog.write(
+          table: 'categories',
+          rowId: (row['id'] ?? '').toString(),
+          action: 'insert',
+          newData: data);
       ref.invalidate(categoriesProvider);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

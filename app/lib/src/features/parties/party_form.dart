@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import 'parties_provider.dart';
 
 class PartyFormDialog extends ConsumerStatefulWidget {
@@ -24,12 +25,22 @@ class _PartyFormDialogState extends ConsumerState<PartyFormDialog> {
     }
     setState(() { busy = true; error = null; });
     try {
-      await Supabase.instance.client.from('parties').insert({
+      final data = {
         'name': name.text.trim(),
         'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
         'address': address.text.trim().isEmpty ? null : address.text.trim(),
         'id_number': idNo.text.trim().isEmpty ? null : idNo.text.trim(),
-      });
+      };
+      final row = await Supabase.instance.client
+          .from('parties')
+          .insert(data)
+          .select('id')
+          .single();
+      await AuditLog.write(
+          table: 'parties',
+          rowId: (row['id'] ?? '').toString(),
+          action: 'insert',
+          newData: data);
       ref.invalidate(partiesProvider);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

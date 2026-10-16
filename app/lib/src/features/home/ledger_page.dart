@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import '../../core/calculator/loan_calculator.dart';
 import '../../core/dates/bs_date.dart';
 import '../../core/widgets/empty_state.dart';
@@ -178,6 +179,8 @@ class LedgerPage extends ConsumerWidget {
                     .from('loans')
                     .update({'deleted_at': DateTime.now().toIso8601String()})
                     .eq('id', r.loan.id);
+                await AuditLog.write(
+                    table: 'loans', rowId: r.loan.id, action: 'archive');
                 ref.invalidate(loansProvider);
               },
             ),
@@ -272,6 +275,8 @@ class LedgerPage extends ConsumerWidget {
                             .from('loans')
                             .update({'deleted_at': DateTime.now().toIso8601String()})
                             .eq('id', l.id);
+                        await AuditLog.write(
+                            table: 'loans', rowId: l.id, action: 'archive');
                         ref.invalidate(loansProvider);
                       },
                     ),

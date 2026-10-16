@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import 'parties_provider.dart';
 import 'party_form.dart';
 import 'party_statement_page.dart';
@@ -55,6 +56,10 @@ class PartiesPage extends ConsumerWidget {
                     ));
                     if (ok == true) {
                       await Supabase.instance.client.from('parties').update({'deleted_at': DateTime.now().toIso8601String()}).eq('id', list[i].id);
+                      await AuditLog.write(
+                          table: 'parties',
+                          rowId: list[i].id,
+                          action: 'archive');
                       ref.invalidate(partiesProvider);
                     }
                   },

@@ -23,7 +23,11 @@ Date opened 2026-10-15 from docs audit 01-11 vs code + DB 21/21/0/0/0/0 rows + m
 
 ## P2
 - [x] Budget tracker v1: accounts/categories/transactions/budgets schema + RLS + seed (3/8/0/0), CRUD forms, spent rollup, loan-txn link, dashboard fl_chart 6-month + donut, full Excel workbook + PDF summary, Decimal-exact Money core (10/10 tests), RLS 10/10 verified + rls_check.sql, idx_txns_loan fix. Remaining: EMI schedule UI + flat compare, party statement, audit_logs writer + UI, bell tray + cron + Edge deploy.
+- [x] P2-1 party statement (model + family provider + page + PDF export, statement action per party row).
+- [x] P2-2 EMI schedule UI (model + family provider + page + PDF export, calendar action per loan row desktop + mobile).
+- [x] P2-3 audit trail (AuditLog fire-and-forget writer + sanitizer, hooks on all 7 forms + 6 archive paths, audit page with table filter chips, More entry, 3 unit tests).
+- [ ] Bell tray + cron + Edge deploy, flat-compare EMI.
 - [ ] UX empty/error/loading, DataTable 1400 mobile scroll strategy recorded, contrast check secondary on white result.
 - [ ] ERD + sequence diagrams, glossary, party naming A/B canonical, changelog + owners.
 
-Verify: flutter analyze 0 errors 15 infos (value-deprecation pattern), test 10/10, build/web success, RLS 10/10 + security 0.
+Verify: flutter analyze 0 errors 0 infos, test 13/13, build/web success, RLS 11/11 (incl. profiles) + security 0.

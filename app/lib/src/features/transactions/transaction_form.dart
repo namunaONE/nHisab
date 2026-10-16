@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import '../accounts/accounts_provider.dart';
 import '../categories/categories_provider.dart';
 
@@ -82,7 +83,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
       final day = txnDate.toIso8601String().substring(0, 10);
       if (kind == 'transfer') {
         // Two legs, same amount/date, excluded from income/expense sums.
-        await client.from('transactions').insert({
+        final outData = {
           'account_id': accountId,
           'kind': 'transfer',
           'amount': amt,
@@ -90,8 +91,18 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
           'notes': notes.text.trim().isEmpty
               ? 'transfer-out'
               : '${notes.text.trim()} (out)',
-        });
-        await client.from('transactions').insert({
+        };
+        final outRow = await client
+            .from('transactions')
+            .insert(outData)
+            .select('id')
+            .single();
+        await AuditLog.write(
+            table: 'transactions',
+            rowId: (outRow['id'] ?? '').toString(),
+            action: 'insert',
+            newData: outData);
+        final inData = {
           'account_id': toAccountId,
           'kind': 'transfer',
           'amount': amt,
@@ -99,16 +110,36 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
           'notes': notes.text.trim().isEmpty
               ? 'transfer-in'
               : '${notes.text.trim()} (in)',
-        });
+        };
+        final inRow = await client
+            .from('transactions')
+            .insert(inData)
+            .select('id')
+            .single();
+        await AuditLog.write(
+            table: 'transactions',
+            rowId: (inRow['id'] ?? '').toString(),
+            action: 'insert',
+            newData: inData);
       } else {
-        await client.from('transactions').insert({
+        final data = {
           'account_id': accountId,
           'category_id': categoryId,
           'kind': kind,
           'amount': amt,
           'txn_date': day,
           'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
-        });
+        };
+        final row = await client
+            .from('transactions')
+            .insert(data)
+            .select('id')
+            .single();
+        await AuditLog.write(
+            table: 'transactions',
+            rowId: (row['id'] ?? '').toString(),
+            action: 'insert',
+            newData: data);
       }
       ref.invalidate(accountsProvider);
       if (mounted) Navigator.pop(context, true);

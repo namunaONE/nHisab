@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import '../parties/parties_provider.dart';
 import 'loans_provider.dart';
 
@@ -87,7 +88,7 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
     try {
       // UI accepts % (18), DB stores decimal (0.18)
       final rateDecimal = rPct / 100;
-      await Supabase.instance.client.from('loans').insert({
+      final data = {
         'party_id': partyId,
         'principal_amount': p,
         'rate': rateDecimal,
@@ -98,7 +99,17 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
         'direction': direction,
         'loan_type': loanType,
         'remarks': remarks.text.trim().isEmpty ? null : remarks.text.trim(),
-      });
+      };
+      final row = await Supabase.instance.client
+          .from('loans')
+          .insert(data)
+          .select('id')
+          .single();
+      await AuditLog.write(
+          table: 'loans',
+          rowId: (row['id'] ?? '').toString(),
+          action: 'insert',
+          newData: data);
       ref.invalidate(loansProvider);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

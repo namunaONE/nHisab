@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import 'accounts_provider.dart';
 import 'account_model.dart';
 
@@ -87,12 +88,26 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
     try {
       final client = Supabase.instance.client;
       if (widget.existing == null) {
-        await client.from('accounts').insert(
-            {'name': n, 'type': type, 'opening_balance': o});
+        final data = {'name': n, 'type': type, 'opening_balance': o};
+        final row = await client
+            .from('accounts')
+            .insert(data)
+            .select('id')
+            .single();
+        await AuditLog.write(
+            table: 'accounts',
+            rowId: (row['id'] ?? '').toString(),
+            action: 'insert',
+            newData: data);
       } else {
-        await client.from('accounts').update(
-            {'name': n, 'type': type, 'opening_balance': o}).eq(
+        final data = {'name': n, 'type': type, 'opening_balance': o};
+        await client.from('accounts').update(data).eq(
             'id', widget.existing!.id);
+        await AuditLog.write(
+            table: 'accounts',
+            rowId: widget.existing!.id,
+            action: 'update',
+            newData: data);
       }
       ref.invalidate(accountsProvider);
       if (mounted) Navigator.pop(context, true);

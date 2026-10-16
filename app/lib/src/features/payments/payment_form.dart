@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import '../../core/calculator/loan_calculator.dart';
 import '../accounts/accounts_provider.dart';
 import '../loans/loans_provider.dart';
@@ -91,14 +92,24 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
       final per = LoanCalculator.perDay(principal: loan.principal, annualRateDecimal: annual, dayBase: loan.dayBase);
       final prev = await prevInterestPaid(loanId!);
       final split = LoanCalculator.splitPayment(payment: amt, perDayAmount: per, start: loan.startDate, payDate: payDate, prevInterestPaid: prev);
-      await Supabase.instance.client.from('payments').insert({
+      final payData = {
         'loan_id': loanId,
         'payment_date': payDate.toIso8601String().substring(0, 10),
         'total_amount': amt,
         'interest_amount': split.interestPart,
         'principal_amount': split.principalPart,
         'payment_method': method,
-      });
+      };
+      final payRow = await Supabase.instance.client
+          .from('payments')
+          .insert(payData)
+          .select('id')
+          .single();
+      await AuditLog.write(
+          table: 'payments',
+          rowId: (payRow['id'] ?? '').toString(),
+          action: 'insert',
+          newData: payData);
       // Wallets-first link: mirror payment legs as transactions when a
       // wallet is picked. Interest leg categorized via lookup, principal leg
       // stays uncategorized (excluded from income/expense by loan_id rule).

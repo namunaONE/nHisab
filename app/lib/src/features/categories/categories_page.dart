@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import 'categories_provider.dart';
 import 'category_form.dart';
 
@@ -49,6 +50,10 @@ class CategoriesPage extends ConsumerWidget {
                         .update({
                       'deleted_at': DateTime.now().toIso8601String()
                     }).eq('id', c.id);
+                    await AuditLog.write(
+                        table: 'categories',
+                        rowId: c.id,
+                        action: 'archive');
                     ref.invalidate(categoriesProvider);
                   },
                 ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import '../../core/budget/budget_calculator.dart';
 import '../categories/categories_provider.dart';
 import 'budgets_provider.dart';
@@ -63,12 +64,16 @@ class _BudgetFormDialogState extends ConsumerState<BudgetFormDialog> {
       error = null;
     });
     try {
-      await Supabase.instance.client.from('budgets').upsert({
+      final data = {
         'category_id': categoryId,
         'fy_year': BudgetCalculator.fyStartYear(month),
         'fy_month': BudgetCalculator.fyMonth(month),
         'limit_amount': l,
-      }, onConflict: 'tenant_id,category_id,fy_year,fy_month');
+      };
+      await Supabase.instance.client.from('budgets').upsert(data,
+          onConflict: 'tenant_id,category_id,fy_year,fy_month');
+      await AuditLog.write(
+          table: 'budgets', action: 'insert', newData: data);
       ref.invalidate(budgetsProvider);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

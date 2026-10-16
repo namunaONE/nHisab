@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/audit/audit_service.dart';
 import 'payments_provider.dart';
 import 'payment_form.dart';
 
@@ -28,6 +29,10 @@ class PaymentsPage extends ConsumerWidget {
               tooltip: 'Void payment (soft delete)',
               onPressed: () async {
                 await Supabase.instance.client.from('payments').update({'deleted_at': DateTime.now().toIso8601String()}).eq('id', list[i].id);
+                await AuditLog.write(
+                    table: 'payments',
+                    rowId: list[i].id,
+                    action: 'archive');
                 ref.invalidate(paymentsProvider);
               },
             ),
