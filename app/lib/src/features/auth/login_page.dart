@@ -61,7 +61,10 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: busy ? null : submit,
-                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF4FD166), foregroundColor: const Color(0xFF00210A)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: scheme.secondary,
+                      foregroundColor: scheme.onSecondary,
+                    ),
                     child: Text(busy ? 'Please wait...' : (isSignup ? 'Create account' : 'Sign in')),
                   ),
                   TextButton(
