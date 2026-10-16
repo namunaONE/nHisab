@@ -13,9 +13,13 @@ Date opened 2026-10-15 from docs audit 01-11 vs code + DB 21/21/0/0/0/0 rows + m
 ## P1
 - [x] Export supabase db to supabase/migrations + Import seed count guard (done). Firebase skipped (Pages locked). .env.example added as app/.env.example 2026-10-15.
 - [x] Pages CI analyze/test/build via .github/workflows/pages.yml (base /nhisab/, 404 + .nojekyll).
-- [ ] docs/api-reference: PostgREST selects per provider + RLS need.
-- [ ] Runbook backup/restore, rate fix, duplicate cleanup, key rotation, Vault pg_net.
-- [ ] Staging/prod project split.
+- [x] docs/14-api-reference: PostgREST selects per provider + RLS need (added).
+- [x] docs/15-runbook: backup/restore, rate fix, duplicate cleanup, key rotation, Vault pg_net (added).
+- [x] docs/10 section 9.5: staging/prod project split approach (added).
+- [x] P1-1: profiles table + RLS + handle_new_user trigger applied remote (migration 20261015160000).
+- [x] P1-2: extended LoginPage (display_name, phone, terms, password show/hide, inline validation) + AuthGate profile role gating + canWriteProvider.
+- [ ] CI analyze/test/build on PRs (workflow runs on push only).
+- [ ] Staging/prod project split (documented in docs/10 section 9.5, not applied).
 
 ## P2
 - [x] Budget tracker v1: accounts/categories/transactions/budgets schema + RLS + seed (3/8/0/0), CRUD forms, spent rollup, loan-txn link, dashboard fl_chart 6-month + donut, full Excel workbook + PDF summary, Decimal-exact Money core (10/10 tests), RLS 10/10 verified + rls_check.sql, idx_txns_loan fix. Remaining: EMI schedule UI + flat compare, party statement, audit_logs writer + UI, bell tray + cron + Edge deploy.

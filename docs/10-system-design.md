@@ -118,6 +118,21 @@ Design from Supabase Cron research:
 - Constraint: Pages sets no custom headers, so stay on JS/CanvasKit build (current `main.dart.js`, no `.wasm`). Wasm multithread needs `COOP/COEP` -> use Firebase Hosting instead if that path is taken.
 - Cost: Pages $0, Supabase free 500MB, Resend free, SMS pay-use. Single shared project $0 marginal per idle tenant vs $10/mo dedicated per tenant.
 
+## 9.5 Staging / Prod Split (Planned)
+
+Single Supabase project `nhisab` serves both dev and prod today ($0 idle, instant
+tenant). For a production split:
+
+1. Create a second Supabase project (e.g. `nhisab-prod`, same org, ap-south-1).
+2. `supabase link --project-ref <prod-ref>` in a separate worktree/branch.
+3. Apply migrations in order: `init_nhisab_schema`, `fix_lints`, `add_soft_delete`,
+   `budget_tracker_v1`, `profiles_table`.
+4. Set GitHub Actions secrets per environment (staging/prod `SUPABASE_URL` +
+   `SUPABASE_ANON_KEY`) and use environment-specific deploy workflows.
+5. Promote: filtered dump from staging -> prod (only tenant rows), re-seed if empty.
+
+Do not split until paying usage justifies the $0 -> $25/mo project cost.
+
 ## 10. Testing and Observability
 
 - Unit: loan_calculator_test 2/2 passed Row1 + EMI sanity. Add: zero-rate, 365 base, split, abs future.

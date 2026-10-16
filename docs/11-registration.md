@@ -35,7 +35,7 @@ Existing public.parties table. For Nepal AML 2008 + NRB KYC norm:
 - ID Number optional now, required for large loans: citizenship / NID / passport. NID centralized KYC per NRB 2082/83, Supreme Court 2026 allows citizenship where NID missing. Record for Black Money Act audit trail.
 
 ## 3. Implementation Checklist
-- [ ] Extend LoginPage signup mode with display_name + phone optional + terms + show toggle
-- [ ] Migration: profiles table + RLS + trigger handle_new_user
-- [ ] Update AuthGate to fetch profile role for owner/viewer gating
+- [x] Extend LoginPage signup mode with display_name + phone optional + terms + show toggle
+- [x] Migration: profiles table + RLS + trigger handle_new_user (20261015160000_profiles_table.sql, applied remote)
+- [x] Update AuthGate to fetch profile role for owner/viewer gating (profileProvider, canWriteProvider, _ReadOnlyNotice)
 - [ ] PartyForm already covers name/phone/address/id_number, add ID required warning when principal > threshold e.g. 500000
