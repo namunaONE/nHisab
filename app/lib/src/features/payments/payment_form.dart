@@ -22,6 +22,34 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
   bool busy = false;
   String? error;
   String preview = '';
+  // Per-field inline validation state
+  String? amountError;
+
+  @override
+  void initState() {
+    super.initState();
+    amount.addListener(_validateAmount);
+  }
+
+  @override
+  void dispose() {
+    amount.removeListener(_validateAmount);
+    amount.dispose();
+    super.dispose();
+  }
+
+  void _validateAmount() {
+    final a = double.tryParse(amount.text.trim());
+    if (amount.text.trim().isEmpty) {
+      setState(() => amountError = null);
+    } else if (a == null) {
+      setState(() => amountError = 'Enter a number like 5000.00');
+    } else if (a <= 0) {
+      setState(() => amountError = 'Amount must be greater than 0');
+    } else {
+      setState(() => amountError = null);
+    }
+  }
 
   Future<double> prevInterestPaid(String loanId) async {
     final rows = await Supabase.instance.client
@@ -50,6 +78,9 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
   }
 
   Future<void> save() async {
+    _validateAmount();
+    if (amountError != null) return;
+
     final amt = double.tryParse(amount.text.trim());
     if (loanId == null || amt == null || amt <= 0) { setState(() => error = 'Select loan + valid amount'); return; }
     setState(() { busy = true; error = null; });
@@ -168,7 +199,8 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
                 onChanged: (v) => setState(() => accountId = v),
               ),
             ),
-            TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount Rs *'), onChanged: (_) => updatePreview()),
+            const SizedBox(height: 12),
+            TextField(controller: amount, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Amount Rs *', errorText: amountError), onChanged: (_) => updatePreview()),
             DropdownButtonFormField<String>(
               initialValue: method,
               items: const [DropdownMenuItem(value: 'cash', child: Text('Cash')), DropdownMenuItem(value: 'bank_transfer', child: Text('Bank transfer')), DropdownMenuItem(value: 'cheque', child: Text('Cheque')), DropdownMenuItem(value: 'online', child: Text('Online'))],
@@ -187,8 +219,8 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Saving...' : 'Save')),
+        TextButton(onPressed: busy ? null : () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Please wait...' : 'Save')),
       ],
     );
   }

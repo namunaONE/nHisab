@@ -17,8 +17,38 @@ class _BudgetFormDialogState extends ConsumerState<BudgetFormDialog> {
   DateTime month = DateTime(DateTime.now().year, DateTime.now().month, 1);
   bool busy = false;
   String? error;
+  String? limitError;
+
+  @override
+  void initState() {
+    super.initState();
+    limit.addListener(_validateLimit);
+  }
+
+  @override
+  void dispose() {
+    limit.removeListener(_validateLimit);
+    limit.dispose();
+    super.dispose();
+  }
+
+  void _validateLimit() {
+    final l = double.tryParse(limit.text.trim());
+    if (limit.text.trim().isEmpty) {
+      setState(() => limitError = null);
+    } else if (l == null) {
+      setState(() => limitError = 'Enter a number like 5000.00');
+    } else if (l < 0) {
+      setState(() => limitError = 'Limit cannot be negative');
+    } else {
+      setState(() => limitError = null);
+    }
+  }
 
   Future<void> save() async {
+    _validateLimit();
+    if (limitError != null) return;
+
     final l = double.tryParse(limit.text.trim());
     if (categoryId == null) {
       setState(() => error = 'Select expense category');
@@ -75,11 +105,15 @@ class _BudgetFormDialogState extends ConsumerState<BudgetFormDialog> {
                 );
               },
             ),
+            const SizedBox(height: 12),
             TextField(
                 controller: limit,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Monthly limit Rs *')),
+                decoration: InputDecoration(
+                  labelText: 'Monthly limit Rs *',
+                  errorText: limitError,
+                )),
+            const SizedBox(height: 12),
             Row(children: [
               Text(
                   'Month: ${month.year}/${month.month} (${BudgetCalculator.fyLabel(month)})'),
@@ -107,11 +141,11 @@ class _BudgetFormDialogState extends ConsumerState<BudgetFormDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: busy ? null : () => Navigator.pop(context),
             child: const Text('Cancel')),
         FilledButton(
             onPressed: busy ? null : save,
-            child: Text(busy ? 'Saving...' : 'Save')),
+            child: Text(busy ? 'Please wait...' : 'Save')),
       ],
     );
   }

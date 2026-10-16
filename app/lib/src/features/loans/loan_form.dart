@@ -23,8 +23,61 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
   final remarks = TextEditingController();
   bool busy = false;
   String? error;
+  // Per-field inline validation state
+  String? partyError;
+  String? principalError;
+  String? rateError;
+
+  @override
+  void initState() {
+    super.initState();
+    principal.addListener(_validatePrincipal);
+    ratePct.addListener(_validateRate);
+  }
+
+  @override
+  void dispose() {
+    principal.removeListener(_validatePrincipal);
+    ratePct.removeListener(_validateRate);
+    principal.dispose();
+    ratePct.dispose();
+    remarks.dispose();
+    super.dispose();
+  }
+
+  void _validatePrincipal() {
+    final p = double.tryParse(principal.text.trim());
+    if (principal.text.trim().isEmpty) {
+      setState(() => principalError = null);
+    } else if (p == null) {
+      setState(() => principalError = 'Enter a number like 1500000.00');
+    } else if (p <= 0) {
+      setState(() => principalError = 'Principal must be greater than 0');
+    } else {
+      setState(() => principalError = null);
+    }
+  }
+
+  void _validateRate() {
+    final r = double.tryParse(ratePct.text.trim());
+    if (ratePct.text.trim().isEmpty) {
+      setState(() => rateError = null);
+    } else if (r == null) {
+      setState(() => rateError = 'Enter a number like 18');
+    } else if (r < 0) {
+      setState(() => rateError = 'Rate cannot be negative');
+    } else if (r > 24) {
+      setState(() => rateError = 'Warning: rate above 24% — verify with bank');
+    } else {
+      setState(() => rateError = null);
+    }
+  }
 
   Future<void> save() async {
+    _validatePrincipal();
+    _validateRate();
+    if (partyError != null || principalError != null || rateError != null) return;
+
     final p = double.tryParse(principal.text.trim());
     final rPct = double.tryParse(ratePct.text.trim());
     if (partyId == null) { setState(() => error = 'Select party'); return; }
@@ -76,21 +129,31 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
                   onChanged: (v) => setState(() => partyId = v),
                 ),
               ),
+              if (partyError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(partyError!,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                ),
+              const SizedBox(height: 12),
               Row(children: [
-                Expanded(child: TextField(controller: principal, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Principal Rs *'))),
+                Expanded(child: TextField(controller: principal, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Principal Rs *', errorText: principalError))),
                 const SizedBox(width: 8),
-                Expanded(child: TextField(controller: ratePct, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Rate % annual * e.g. 18'))),
+                Expanded(child: TextField(controller: ratePct, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Rate % annual * e.g. 18', errorText: rateError))),
               ]),
+              const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: DropdownButtonFormField<String>(initialValue: direction, items: const [DropdownMenuItem(value: 'receivable', child: Text('Lent out')), DropdownMenuItem(value: 'payable', child: Text('Borrowed'))], onChanged: (v) => setState(() => direction = v!))),
                 const SizedBox(width: 8),
                 Expanded(child: DropdownButtonFormField<String>(initialValue: method, items: const [DropdownMenuItem(value: 'daily_accrual', child: Text('Daily accrual')), DropdownMenuItem(value: 'reducing_balance', child: Text('EMI reducing'))], onChanged: (v) => setState(() => method = v!))),
               ]),
+              const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: DropdownButtonFormField<int>(initialValue: dayBase, items: const [DropdownMenuItem(value: 360, child: Text('360 banker')), DropdownMenuItem(value: 365, child: Text('365 actual'))], onChanged: (v) => setState(() => dayBase = v!))),
                 const SizedBox(width: 8),
                 Expanded(child: DropdownButtonFormField<String>(initialValue: loanType, items: const [DropdownMenuItem(value: 'personal', child: Text('Personal')), DropdownMenuItem(value: 'business', child: Text('Business')), DropdownMenuItem(value: 'home', child: Text('Home')), DropdownMenuItem(value: 'vehicle', child: Text('Vehicle')), DropdownMenuItem(value: 'cash_credit', child: Text('Cash Credit')), DropdownMenuItem(value: 'demand', child: Text('Demand'))], onChanged: (v) => setState(() => loanType = v!))),
               ]),
+              const SizedBox(height: 12),
               Row(children: [
                 Text('Start: ${startDate.year}/${startDate.month}/${startDate.day}'),
                 TextButton(onPressed: () async {
@@ -98,6 +161,7 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
                   if (d != null) setState(() => startDate = d);
                 }, child: const Text('Pick')),
               ]),
+              const SizedBox(height: 12),
               TextField(controller: remarks, decoration: const InputDecoration(labelText: 'Remarks')),
               if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
             ],
@@ -105,8 +169,8 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Saving...' : 'Save loan')),
+        TextButton(onPressed: busy ? null : () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Please wait...' : 'Save loan')),
       ],
     );
   }

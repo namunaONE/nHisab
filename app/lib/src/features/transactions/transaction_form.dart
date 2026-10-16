@@ -21,8 +21,40 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
   final notes = TextEditingController();
   bool busy = false;
   String? error;
+  // Per-field inline validation state
+  String? amountError;
+
+  @override
+  void initState() {
+    super.initState();
+    amount.addListener(_validateAmount);
+  }
+
+  @override
+  void dispose() {
+    amount.removeListener(_validateAmount);
+    amount.dispose();
+    notes.dispose();
+    super.dispose();
+  }
+
+  void _validateAmount() {
+    final a = double.tryParse(amount.text.trim());
+    if (amount.text.trim().isEmpty) {
+      setState(() => amountError = null);
+    } else if (a == null) {
+      setState(() => amountError = 'Enter a number like 5000.00');
+    } else if (a <= 0) {
+      setState(() => amountError = 'Amount must be greater than 0');
+    } else {
+      setState(() => amountError = null);
+    }
+  }
 
   Future<void> save() async {
+    _validateAmount();
+    if (amountError != null) return;
+
     final amt = double.tryParse(amount.text.trim());
     if (accountId == null) {
       setState(() => error = 'Select wallet');
@@ -158,11 +190,14 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
                     );
                   },
                 ),
+              const SizedBox(height: 12),
               TextField(
                   controller: amount,
                   keyboardType: TextInputType.number,
-                  decoration:
-                      const InputDecoration(labelText: 'Amount Rs *')),
+                  decoration: InputDecoration(
+                    labelText: 'Amount Rs *',
+                    errorText: amountError,
+                  )),
               Row(children: [
                 Text(
                     'Date: ${txnDate.year}/${txnDate.month}/${txnDate.day}'),
@@ -192,11 +227,11 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: busy ? null : () => Navigator.pop(context),
             child: const Text('Cancel')),
         FilledButton(
             onPressed: busy ? null : save,
-            child: Text(busy ? 'Saving...' : 'Save')),
+            child: Text(busy ? 'Please wait...' : 'Save')),
       ],
     );
   }

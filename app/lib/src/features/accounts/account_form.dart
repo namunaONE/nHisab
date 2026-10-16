@@ -18,6 +18,9 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
   late String type;
   bool busy = false;
   String? error;
+  // Per-field inline validation state
+  String? nameError;
+  String? openingError;
 
   @override
   void initState() {
@@ -28,15 +31,51 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
             ? widget.existing!.openingBalance.toStringAsFixed(0)
             : '0');
     type = widget.existing?.type ?? 'cash';
+    name.addListener(_validateName);
+    opening.addListener(_validateOpening);
+  }
+
+  @override
+  void dispose() {
+    name.removeListener(_validateName);
+    opening.removeListener(_validateOpening);
+    name.dispose();
+    opening.dispose();
+    super.dispose();
+  }
+
+  void _validateName() {
+    final n = name.text.trim();
+    if (n.isEmpty) {
+      setState(() => nameError = 'Name is required');
+    } else if (n.length < 2) {
+      setState(() => nameError = 'Name too short (min 2 chars)');
+    } else {
+      setState(() => nameError = null);
+    }
+  }
+
+  void _validateOpening() {
+    final o = double.tryParse(opening.text.trim());
+    if (opening.text.trim().isEmpty) {
+      setState(() => openingError = null);
+    } else if (o == null) {
+      setState(() => openingError = 'Enter a number like 15000.00');
+    } else if (o < 0) {
+      setState(() => openingError = 'Opening balance cannot be negative');
+    } else {
+      setState(() => openingError = null);
+    }
   }
 
   Future<void> save() async {
+    // Run inline validation first
+    _validateName();
+    _validateOpening();
+    if (nameError != null || openingError != null) return;
+
     final n = name.text.trim();
     final o = double.tryParse(opening.text.trim());
-    if (n.isEmpty) {
-      setState(() => error = 'Name required');
-      return;
-    }
     if (o == null || o < 0) {
       setState(() => error = 'Valid opening balance required');
       return;
@@ -51,8 +90,6 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
         await client.from('accounts').insert(
             {'name': n, 'type': type, 'opening_balance': o});
       } else {
-        // Opening editable only when no txns exist (enforced in UI text;
-        // DB allows it — v1 rule documented in docs/04).
         await client.from('accounts').update(
             {'name': n, 'type': type, 'opening_balance': o}).eq(
             'id', widget.existing!.id);
@@ -77,8 +114,11 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
           children: [
             TextField(
                 controller: name,
-                decoration: const InputDecoration(
-                    labelText: 'Name * e.g. Cash, Machhapuchhre Bank')),
+                decoration: InputDecoration(
+                  labelText: 'Name * e.g. Cash, Machhapuchhre Bank',
+                  errorText: nameError,
+                )),
+            const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: type,
               decoration: const InputDecoration(labelText: 'Type *'),
@@ -90,11 +130,14 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
               ],
               onChanged: (v) => setState(() => type = v!),
             ),
+            const SizedBox(height: 12),
             TextField(
                 controller: opening,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                    labelText: 'Opening balance Rs *')),
+                decoration: InputDecoration(
+                  labelText: 'Opening balance Rs *',
+                  errorText: openingError,
+                )),
             if (widget.existing != null)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
@@ -112,11 +155,11 @@ class _AccountFormDialogState extends ConsumerState<AccountFormDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: busy ? null : () => Navigator.pop(context),
             child: const Text('Cancel')),
         FilledButton(
             onPressed: busy ? null : save,
-            child: Text(busy ? 'Saving...' : 'Save')),
+            child: Text(busy ? 'Please wait...' : 'Save')),
       ],
     );
   }
