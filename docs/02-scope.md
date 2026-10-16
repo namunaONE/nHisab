@@ -23,4 +23,4 @@ Scope: loans (existing) + income/expenses + monthly budgets + dashboard/charts.
 - Status: skeleton on main (migration SQL + stub pages + providers returning [] until applied). Full CRUD lands in branches.
 
 ## Constraints - Actual
-AD DATE only, BS display. NUMERIC(15,2) DB, Dart Decimal-exact via core/money (Money.sum2/perDay/interest) since 2026-10-15, 10/10 tests. No hard delete rule enforced via deleted_at + RLS filter.
+AD DATE only, BS display + BS input via BsPicker (bikram_sambat table, verified vs 2080-01-01 anchor). NUMERIC(15,2) DB, Dart Decimal-exact via core/money (Money.sum2/perDay/interest) since 2026-10-15, 10/10 tests. No hard delete rule enforced via deleted_at + RLS filter.

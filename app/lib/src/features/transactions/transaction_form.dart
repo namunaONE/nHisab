@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/audit/audit_service.dart';
 import '../../core/cache/connectivity_provider.dart';
 import '../../core/cache/outbox.dart';
+import '../../core/dates/bs_date.dart';
+import '../../core/dates/bs_picker.dart';
 import '../accounts/accounts_provider.dart';
 import '../categories/categories_provider.dart';
 import 'transactions_provider.dart';
@@ -230,12 +232,12 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
                     errorText: amountError,
                   )),
               Row(children: [
-                Text(
-                    'Date: ${txnDate.year}/${txnDate.month}/${txnDate.day}'),
+                Expanded(
+                    child: Text('Date: ${BsDate.dual(txnDate)}')),
                 TextButton(
                     onPressed: () async {
-                      final d = await showDatePicker(
-                          context: context,
+                      final d = await BsPicker.pick(
+                          context,
                           initialDate: txnDate,
                           firstDate: DateTime(2000),
                           lastDate: DateTime(2100));

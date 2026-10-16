@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/audit/audit_service.dart';
 import '../../core/budget/budget_calculator.dart';
+import '../../core/dates/bs_date.dart';
+import '../../core/dates/bs_picker.dart';
 import '../categories/categories_provider.dart';
 import 'budgets_provider.dart';
 
@@ -120,12 +122,13 @@ class _BudgetFormDialogState extends ConsumerState<BudgetFormDialog> {
                 )),
             const SizedBox(height: 12),
             Row(children: [
-              Text(
-                  'Month: ${month.year}/${month.month} (${BudgetCalculator.fyLabel(month)})'),
+              Expanded(
+                  child: Text(
+                      'Month: ${month.year}/${month.month} (${BudgetCalculator.fyLabel(month)})\n${BsDate.toBsString(DateTime(month.year, month.month, 1))}')),
               TextButton(
                   onPressed: () async {
-                    final d = await showDatePicker(
-                        context: context,
+                    final d = await BsPicker.pick(
+                        context,
                         initialDate: month,
                         firstDate: DateTime(2020),
                         lastDate: DateTime(2100));

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/audit/audit_service.dart';
 import '../../core/calculator/loan_calculator.dart';
 import '../../core/dates/bs_date.dart';
+import '../../core/dates/bs_picker.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/skeleton.dart';
 import '../home/home_shell.dart';
@@ -82,7 +83,7 @@ class LedgerPage extends ConsumerWidget {
                 Text('Today: ${BsDate.dual(DateTime(today.year, today.month, today.day))}'),
                 ElevatedButton(
                   onPressed: () async {
-                    final d = await showDatePicker(context: context, initialDate: today, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    final d = await BsPicker.pick(context, initialDate: today, firstDate: DateTime(2000), lastDate: DateTime(2100));
                     if (d != null) ref.read(todayProvider.notifier).state = d;
                   },
                   child: const Text('Change Today'),

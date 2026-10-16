@@ -29,8 +29,9 @@ Date opened 2026-10-15 from docs audit 01-11 vs code + DB 21/21/0/0/0/0 rows + m
 - [x] P2-4 alerts (bell badge + tray with Realtime invalidate, mark-read, More entry, 2 unit tests; Edge dispatch-alerts source + cron migration pending keys/CLI deploy).
 - [x] P2-5 widget tests (auth gate login/owner/viewer, dashboard panels, ledger desktop/mobile, bell badge + tray nav, empty/error states; shared_preferences mock for Supabase init; CI runs full suite).
 - [x] P2-6 offline Hive cache (CacheService read-through on 7 providers + writeMap for joins, Outbox enqueue/flush, offline banner + flush-on-reconnect in HomeShell, offline-first txn/payment forms, main init guarded, 4 cache tests).
+- [x] P2-7 BS date pickers (BsPicker dual AD/BS choice sheet + custom BS month grid on bikram_sambat table; nepali_utils rejected — off by one vs 2080-01-01 anchor; all 5 pickers wired with dual labels; 4 unit + 2 widget tests).
 - [ ] Flat-compare EMI, Edge deploy + cron schedule (needs Resend/SMS keys + CLI).
 - [ ] UX empty/error/loading, DataTable 1400 mobile scroll strategy recorded, contrast check secondary on white result.
 - [ ] ERD + sequence diagrams, glossary, party naming A/B canonical, changelog + owners.
 
-Verify: flutter analyze 0 errors 0 infos, test 33/33 (15 unit + 14 widget + 4 cache), build/web success, RLS 11/11 (incl. profiles) + security 0.
+Verify: flutter analyze 0 errors 0 infos, test 39/39 (15 unit + 14 widget + 4 cache + 4 bs + 2 bs-widget), build/web success, RLS 11/11 (incl. profiles) + security 0.

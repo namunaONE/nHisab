@@ -5,6 +5,8 @@ import '../../core/audit/audit_service.dart';
 import '../../core/cache/connectivity_provider.dart';
 import '../../core/cache/outbox.dart';
 import '../../core/calculator/loan_calculator.dart';
+import '../../core/dates/bs_date.dart';
+import '../../core/dates/bs_picker.dart';
 import '../accounts/accounts_provider.dart';
 import '../loans/loans_provider.dart';
 import '../transactions/transactions_provider.dart';
@@ -251,9 +253,9 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
               onChanged: (v) => setState(() => method = v!),
             ),
             Row(children: [
-              Text('Date: ${payDate.year}/${payDate.month}/${payDate.day}'),
+              Expanded(child: Text('Date: ${BsDate.dual(payDate)}')),
               TextButton(onPressed: () async {
-                final d = await showDatePicker(context: context, initialDate: payDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                final d = await BsPicker.pick(context, initialDate: payDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
                 if (d != null) { setState(() => payDate = d); updatePreview(); }
               }, child: const Text('Pick')),
             ]),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/audit/audit_service.dart';
+import '../../core/dates/bs_date.dart';
+import '../../core/dates/bs_picker.dart';
 import '../parties/parties_provider.dart';
 import 'loans_provider.dart';
 
@@ -166,9 +168,9 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
               ]),
               const SizedBox(height: 12),
               Row(children: [
-                Text('Start: ${startDate.year}/${startDate.month}/${startDate.day}'),
+                Expanded(child: Text('Start: ${BsDate.dual(startDate)}')),
                 TextButton(onPressed: () async {
-                  final d = await showDatePicker(context: context, initialDate: startDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                  final d = await BsPicker.pick(context, initialDate: startDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
                   if (d != null) setState(() => startDate = d);
                 }, child: const Text('Pick')),
               ]),
