@@ -37,8 +37,8 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Test calculator
-        run: flutter test test/loan_calculator_test.dart
+      - name: Test
+        run: flutter test
 
       - name: Build web for Pages
         run: |
