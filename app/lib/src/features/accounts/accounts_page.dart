@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/skeleton.dart';
 import 'account_form.dart';
 import 'accounts_provider.dart';
 
@@ -21,18 +23,22 @@ class AccountsPage extends ConsumerWidget {
         child: const Icon(Icons.add),
       ),
       body: accountsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Supabase error: $e')),
+        loading: () => const SkeletonList(itemCount: 4),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(accountsProvider),
+        ),
         data: (list) {
           if (list.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'No wallets yet. Tap + to add cash / bank / mobile.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+            return EmptyState(
+              icon: Icons.account_balance_wallet,
+              title: 'No wallets yet',
+              subtitle:
+                  'Add cash / bank / mobile wallets to start tracking money.',
+              ctaLabel: 'Add wallet',
+              onCta: () => showDialog(
+                  context: context,
+                  builder: (_) => const AccountFormDialog()),
             );
           }
           return ListView.builder(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/skeleton.dart';
 import '../accounts/accounts_provider.dart';
 import '../categories/categories_provider.dart';
 import '../categories/category_form.dart';
@@ -41,18 +43,26 @@ class TransactionsPage extends ConsumerWidget {
         child: const Icon(Icons.add),
       ),
       body: txnsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Supabase error: $e')),
+        loading: () => const SkeletonList(itemCount: 5),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(transactionsProvider),
+        ),
         data: (list) {
           if (list.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'No income/expenses yet. Tap + to record one.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+            return EmptyState(
+              icon: Icons.receipt_long,
+              title: 'No income/expenses yet',
+              subtitle:
+                  'Record your first transaction to see cashflow and budgets.',
+              ctaLabel: 'Add transaction',
+              onCta: () {
+                ref.invalidate(accountsProvider);
+                ref.invalidate(categoriesProvider);
+                showDialog(
+                    context: context,
+                    builder: (_) => const TransactionFormDialog());
+              },
             );
           }
           return ListView.builder(

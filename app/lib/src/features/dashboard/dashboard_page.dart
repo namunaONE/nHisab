@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/budget/budget_calculator.dart';
+import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/skeleton.dart';
 import '../accounts/accounts_provider.dart';
 import '../budgets/budgets_provider.dart';
+import '../categories/categories_provider.dart';
 import '../loans/loans_provider.dart';
 import '../transactions/transactions_provider.dart';
 
@@ -26,14 +29,16 @@ class DashboardPage extends ConsumerWidget {
         children: [
           // Net worth card
           accountsAsync.when(
-            loading: () => const Card.outlined(
-                child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('Loading wallets…'))),
+            loading: () => const SkeletonCard(height: 140),
             error: (e, _) => Card.outlined(
-                child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text('Wallets error: $e'))),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ErrorState(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(accountsProvider),
+                ),
+              ),
+            ),
             data: (accs) {
               final total = BudgetCalculator.round2(
                   accs.fold(0.0, (s, a) => s + a.computedBalance));
@@ -64,8 +69,16 @@ class DashboardPage extends ConsumerWidget {
           const SizedBox(height: 12),
           // Cashflow: last 6 AD months, income vs expense per month
           txnsAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (e, _) => Text('Txns error: $e'),
+            loading: () => const SkeletonCard(height: 240),
+            error: (e, _) => Card.outlined(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ErrorState(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(transactionsProvider),
+                ),
+              ),
+            ),
             data: (txns) {
               final now = DateTime.now();
               final months = List.generate(
@@ -99,6 +112,24 @@ class DashboardPage extends ConsumerWidget {
                   incomeByM.fold(0.0, (s, v) => s + v);
               final totalOut =
                   expenseByM.fold(0.0, (s, v) => s + v);
+              if (txns.isEmpty) {
+                return Card.outlined(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: EmptyState(
+                      icon: Icons.show_chart,
+                      title: 'No transactions yet',
+                      subtitle: 'Record income/expenses to see cashflow.',
+                      ctaLabel: 'Add transaction',
+                      onCta: () {
+                        ref.invalidate(accountsProvider);
+                        ref.invalidate(categoriesProvider);
+                        // Navigate to transactions handled by parent via route
+                      },
+                    ),
+                  ),
+                );
+              }
               return Card.outlined(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -173,14 +204,26 @@ class DashboardPage extends ConsumerWidget {
           const SizedBox(height: 12),
           // Budget donut
           budgetsAsync.when(
-            loading: () => const SizedBox.shrink(),
-            error: (e, _) => Text('Budgets error: $e'),
+            loading: () => const SkeletonCard(height: 220),
+            error: (e, _) => Card.outlined(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ErrorState(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(budgetsProvider),
+                ),
+              ),
+            ),
             data: (budgets) {
               if (budgets.isEmpty) {
-                return const Card.outlined(
+                return Card.outlined(
                   child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('No budgets yet — set monthly limits.'),
+                    padding: const EdgeInsets.all(16),
+                    child: EmptyState(
+                      icon: Icons.savings,
+                      title: 'No budgets yet',
+                      subtitle: 'Set monthly limits to track spending.',
+                    ),
                   ),
                 );
               }
@@ -225,7 +268,15 @@ class DashboardPage extends ConsumerWidget {
           // Overdue / loan strip
           loansAsync.when(
             loading: () => const SizedBox.shrink(),
-            error: (e, _) => const SizedBox.shrink(),
+            error: (e, _) => Card.outlined(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ErrorState(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(loansProvider),
+                ),
+              ),
+            ),
             data: (loans) => Card.outlined(
               child: Padding(
                 padding: const EdgeInsets.all(16),

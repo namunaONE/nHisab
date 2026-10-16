@@ -5,7 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/calculator/loan_calculator.dart';
 import '../../core/dates/bs_date.dart';
+import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/skeleton.dart';
 import '../home/home_shell.dart';
+import '../loans/loan_form.dart';
 import '../loans/loan_model.dart';
 import '../loans/loans_provider.dart';
 
@@ -91,10 +94,25 @@ class LedgerPage extends ConsumerWidget {
               builder: (context, constraints) {
                 final isMobile = constraints.maxWidth < 600;
                 return loansAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('Supabase error: $e')),
+                  loading: () => const SkeletonList(itemCount: 4),
+                  error: (e, _) => ErrorState(
+                    message: e.toString(),
+                    onRetry: () => ref.invalidate(loansProvider),
+                  ),
                   data: (loans) {
                     final rows = _rows(loans, today, fmt, scheme, ref);
+                    if (loans.isEmpty) {
+                      return EmptyState(
+                        icon: Icons.table_chart,
+                        title: 'No loans yet',
+                        subtitle:
+                            'Add a party and loan to start tracking interest and dues.',
+                        ctaLabel: 'Add loan',
+                        onCta: () => showDialog(
+                            context: context,
+                            builder: (_) => const LoanFormDialog()),
+                      );
+                    }
                     if (isMobile) {
                       return _mobileBody(context, rows, fmt, scheme, ref);
                     }

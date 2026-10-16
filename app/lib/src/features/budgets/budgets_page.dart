@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/budget/budget_calculator.dart';
+import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/skeleton.dart';
 import 'budget_form.dart';
 import 'budgets_provider.dart';
 
@@ -22,18 +24,22 @@ class BudgetsPage extends ConsumerWidget {
         child: const Icon(Icons.add),
       ),
       body: budgetsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Supabase error: $e')),
+        loading: () => const SkeletonList(itemCount: 4),
+        error: (e, _) => ErrorState(
+          message: e.toString(),
+          onRetry: () => ref.invalidate(budgetsProvider),
+        ),
         data: (list) {
           if (list.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'No budgets yet.\nApply migration 20261015140000_budget_tracker_v1.\nNepal FY ${BudgetCalculator.fyLabel(DateTime.now())}, no rollover in v1.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+            return EmptyState(
+              icon: Icons.savings,
+              title: 'No budgets yet',
+              subtitle:
+                  'Apply migration 20261015140000_budget_tracker_v1, then set monthly limits.\nNepal FY ${BudgetCalculator.fyLabel(DateTime.now())}, no rollover in v1.',
+              ctaLabel: 'Set budget',
+              onCta: () => showDialog(
+                  context: context,
+                  builder: (_) => const BudgetFormDialog()),
             );
           }
           return ListView.builder(
