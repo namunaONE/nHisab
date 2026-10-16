@@ -8,6 +8,7 @@ import '../../core/dates/bs_date.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/skeleton.dart';
 import '../home/home_shell.dart';
+import '../loans/emi_schedule_page.dart';
 import '../loans/loan_form.dart';
 import '../loans/loan_model.dart';
 import '../loans/loans_provider.dart';
@@ -116,7 +117,7 @@ class LedgerPage extends ConsumerWidget {
                     if (isMobile) {
                       return _mobileBody(context, rows, fmt, scheme, ref);
                     }
-                    return _desktopBody(loans, rows, today, fmt, scheme, ref);
+                    return _desktopBody(context, loans, rows, today, fmt, scheme, ref);
                   },
                 );
               },
@@ -130,7 +131,7 @@ class LedgerPage extends ConsumerWidget {
   // =========================================================================
   // Desktop - 13-column DataTable (minWidth 1400 + horizontal scroll)
   // =========================================================================
-  Widget _desktopBody(List<LoanRow> loans, List<_LoanRowData> rows, DateTime today,
+  Widget _desktopBody(BuildContext context, List<LoanRow> loans, List<_LoanRowData> rows, DateTime today,
       NumberFormat fmt, ColorScheme scheme, WidgetRef ref) {
     double tP = 0, tPer = 0, tI = 0, tPaid = 0, tDues = 0, tT = 0;
     for (final l in loans) {
@@ -157,16 +158,30 @@ class LedgerPage extends ConsumerWidget {
         DataCell(Text(fmt.format(r.loan.paid))),
         DataCell(Text(fmt.format(r.dues), style: TextStyle(color: scheme.error))),
         DataCell(Text(fmt.format(r.total), style: TextStyle(color: scheme.primary, fontWeight: FontWeight.bold))),
-        DataCell(IconButton(
-          icon: const Icon(Icons.archive_outlined, size: 18),
-          tooltip: 'Archive loan',
-          onPressed: () async {
-            await Supabase.instance.client
-                .from('loans')
-                .update({'deleted_at': DateTime.now().toIso8601String()})
-                .eq('id', r.loan.id);
-            ref.invalidate(loansProvider);
-          },
+        DataCell(Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.calendar_today, size: 18),
+              tooltip: 'View EMI schedule',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => EmiSchedulePage(loanId: r.loan.id)),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.archive_outlined, size: 18),
+              tooltip: 'Archive loan',
+              onPressed: () async {
+                await Supabase.instance.client
+                    .from('loans')
+                    .update({'deleted_at': DateTime.now().toIso8601String()})
+                    .eq('id', r.loan.id);
+                ref.invalidate(loansProvider);
+              },
+            ),
+          ],
         )),
       ]));
     }
@@ -240,6 +255,15 @@ class LedgerPage extends ConsumerWidget {
                   children: [
                     Text(r.sn.toString(), style: Theme.of(context).textTheme.labelSmall),
                     const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      tooltip: 'View EMI schedule',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => EmiSchedulePage(loanId: l.id)),
+                      ),
+                    ),
                     IconButton(
                       icon: const Icon(Icons.archive_outlined, size: 18),
                       tooltip: 'Archive loan',
