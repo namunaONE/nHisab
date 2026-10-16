@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/cache/cache_service.dart';
 
 class Party {
   final String id;
@@ -10,11 +11,21 @@ class Party {
 }
 
 final partiesProvider = FutureProvider<List<Party>>((ref) async {
-  final res = await Supabase.instance.client.from('parties').select('id, name, phone, address').filter('deleted_at', 'is', null).order('name');
-  return (res as List).map((r) => Party(
-    id: r['id'] as String,
-    name: (r['name'] ?? '').toString(),
-    phone: r['phone'] as String?,
-    address: r['address'] as String?,
-  )).toList();
+  final result = await CacheService.fetchOrCache(
+    key: 'parties:all',
+    fetch: () async => await Supabase.instance.client
+        .from('parties')
+        .select('id, name, phone, address')
+        .filter('deleted_at', 'is', null)
+        .order('name') as List,
+  );
+  return CacheService.parseAll(result.rows, (r) {
+    final m = r;
+    return Party(
+      id: (m['id'] ?? '').toString(),
+      name: (m['name'] ?? '').toString(),
+      phone: m['phone'] as String?,
+      address: m['address'] as String?,
+    );
+  });
 });

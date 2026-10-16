@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/cache/cache_service.dart';
 
 class PaymentRow {
   final String id;
@@ -12,22 +13,25 @@ class PaymentRow {
 }
 
 final paymentsProvider = FutureProvider<List<PaymentRow>>((ref) async {
-  final res = await Supabase.instance.client
-      .from('payments')
-      .select('id, loan_id, payment_date, total_amount, payment_method, loans(parties(name))')
-      .filter('deleted_at', 'is', null)
-      .order('payment_date', ascending: false)
-      .limit(200);
-  return (res as List).map((r) {
+  final result = await CacheService.fetchOrCache(
+    key: 'payments:200',
+    fetch: () async => await Supabase.instance.client
+        .from('payments')
+        .select('id, loan_id, payment_date, total_amount, payment_method, loans(parties(name))')
+        .filter('deleted_at', 'is', null)
+        .order('payment_date', ascending: false)
+        .limit(200) as List,
+  );
+  return CacheService.parseAll(result.rows, (r) {
     final loan = r['loans'] as Map?;
     final party = (loan?['parties'] as Map?)?['name'] ?? '-';
     return PaymentRow(
-      id: r['id'] as String,
-      loanId: r['loan_id'] as String,
+      id: (r['id'] ?? '').toString(),
+      loanId: (r['loan_id'] ?? '').toString(),
       partyName: party.toString(),
       date: DateTime.parse(r['payment_date'] as String),
-      total: (r['total_amount'] as num).toDouble(),
+      total: ((r['total_amount'] as num?) ?? 0).toDouble(),
       method: r['payment_method'] as String?,
     );
-  }).toList();
+  });
 });

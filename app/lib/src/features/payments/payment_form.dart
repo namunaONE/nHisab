@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/audit/audit_service.dart';
+import '../../core/cache/connectivity_provider.dart';
+import '../../core/cache/outbox.dart';
 import '../../core/calculator/loan_calculator.dart';
 import '../accounts/accounts_provider.dart';
 import '../loans/loans_provider.dart';
@@ -90,16 +92,65 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
       final loan = loans.firstWhere((l) => l.id == loanId!);
       final annual = LoanCalculator.annualRate(rate: loan.rate, rateType: loan.rateType);
       final per = LoanCalculator.perDay(principal: loan.principal, annualRateDecimal: annual, dayBase: loan.dayBase);
-      final prev = await prevInterestPaid(loanId!);
+      double prev;
+      try {
+        prev = await prevInterestPaid(loanId!);
+      } catch (_) {
+        // Offline: approximate with 0; FIFO flush order keeps this consistent.
+        prev = 0;
+      }
       final split = LoanCalculator.splitPayment(payment: amt, perDayAmount: per, start: loan.startDate, payDate: payDate, prevInterestPaid: prev);
+      final day = payDate.toIso8601String().substring(0, 10);
       final payData = {
         'loan_id': loanId,
-        'payment_date': payDate.toIso8601String().substring(0, 10),
+        'payment_date': day,
         'total_amount': amt,
         'interest_amount': split.interestPart,
         'principal_amount': split.principalPart,
         'payment_method': method,
       };
+      final isReceivable = loan.direction == 'receivable';
+      final txnLegs = <Map<String, dynamic>>[];
+      if (accountId != null) {
+        if (split.interestPart > 0) {
+          txnLegs.add({
+            'account_id': accountId,
+            'loan_id': loanId,
+            'kind': isReceivable ? 'income' : 'expense',
+            'amount': split.interestPart,
+            'txn_date': day,
+            'notes': isReceivable
+                ? 'loan interest received'
+                : 'loan interest paid',
+          });
+        }
+        if (split.principalPart > 0) {
+          txnLegs.add({
+            'account_id': accountId,
+            'loan_id': loanId,
+            'kind': isReceivable ? 'income' : 'expense',
+            'amount': split.principalPart,
+            'txn_date': day,
+            'notes': isReceivable
+                ? 'loan principal received'
+                : 'loan principal paid',
+          });
+        }
+      }
+      // Offline first: queue payment + legs, sync on reconnect.
+      if (ref.read(isOfflineProvider)) {
+        await Outbox.enqueue(table: 'payments', data: payData);
+        for (final leg in txnLegs) {
+          await Outbox.enqueue(table: 'transactions', data: leg);
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Offline — payment queued, will sync on reconnect.'),
+          ));
+          Navigator.pop(context, true);
+        }
+        return;
+      }
       final payRow = await Supabase.instance.client
           .from('payments')
           .insert(payData)
@@ -116,8 +167,6 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
       // Missing budget tables (pre-migration) are ignored on purpose.
       if (accountId != null) {
         try {
-          final day = payDate.toIso8601String().substring(0, 10);
-          final isReceivable = loan.direction == 'receivable';
           String? intCatId;
           try {
             final cats = await Supabase.instance.client
@@ -140,30 +189,14 @@ class _PaymentFormDialogState extends ConsumerState<PaymentFormDialog> {
               }
             }
           } catch (_) {}
-          if (split.interestPart > 0) {
-            await Supabase.instance.client.from('transactions').insert({
-              'account_id': accountId,
-              'category_id': intCatId,
-              'loan_id': loanId,
-              'kind': isReceivable ? 'income' : 'expense',
-              'amount': split.interestPart,
-              'txn_date': day,
-              'notes': isReceivable
-                  ? 'loan interest received'
-                  : 'loan interest paid',
-            });
-          }
-          if (split.principalPart > 0) {
-            await Supabase.instance.client.from('transactions').insert({
-              'account_id': accountId,
-              'loan_id': loanId,
-              'kind': isReceivable ? 'income' : 'expense',
-              'amount': split.principalPart,
-              'txn_date': day,
-              'notes': isReceivable
-                  ? 'loan principal received'
-                  : 'loan principal paid',
-            });
+          for (final leg in txnLegs) {
+            final payload = Map<String, dynamic>.from(leg);
+            if (payload['notes']?.toString().contains('interest') == true) {
+              payload['category_id'] = intCatId;
+            }
+            await Supabase.instance.client
+                .from('transactions')
+                .insert(payload);
           }
           ref.invalidate(accountsProvider);
           ref.invalidate(transactionsProvider);

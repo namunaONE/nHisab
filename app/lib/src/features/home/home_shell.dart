@@ -8,6 +8,10 @@ import '../loans/loan_form.dart';
 import '../more/more_page.dart';
 import '../notifications/notifications_provider.dart';
 import '../parties/party_form.dart';
+import '../../core/cache/connectivity_provider.dart';
+import '../../core/cache/outbox.dart';
+import '../accounts/accounts_provider.dart';
+import '../transactions/transactions_provider.dart';
 import '../payments/payment_form.dart';
 import '../transactions/transactions_page.dart';
 import 'ledger_page.dart';
@@ -29,6 +33,21 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _notifChannel = subscribeNotifications(ref);
     });
+    // Flush the offline outbox whenever connectivity returns.
+    ref.listenManual(
+      isOfflineProvider,
+      (prev, next) {
+        if (prev == true && next == false) {
+          Outbox.flush().then((r) {
+            if (r.flushed > 0) {
+              ref.invalidate(accountsProvider);
+              ref.invalidate(transactionsProvider);
+            }
+          });
+        }
+      },
+      fireImmediately: false,
+    );
   }
 
   @override
@@ -48,8 +67,38 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       BudgetsPage(),
       MorePage(),
     ];
+    final offline = ref.watch(isOfflineProvider);
     return Scaffold(
-      body: pages[idx],
+      body: Column(
+        children: [
+          if (offline)
+            Container(
+              width: double.infinity,
+              color: Theme.of(context).colorScheme.errorContainer,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.cloud_off_outlined,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onErrorContainer),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Offline — showing cached data. New entries queue and sync on reconnect.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color:
+                            Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(child: pages[idx]),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: idx,
         onDestinationSelected: (i) => setState(() => idx = i),

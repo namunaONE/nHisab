@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/audit/audit_service.dart';
+import '../../core/cache/connectivity_provider.dart';
+import '../../core/cache/outbox.dart';
 import '../accounts/accounts_provider.dart';
 import '../categories/categories_provider.dart';
+import 'transactions_provider.dart';
 
 class TransactionFormDialog extends ConsumerStatefulWidget {
   const TransactionFormDialog({super.key});
@@ -78,70 +81,67 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
       busy = true;
       error = null;
     });
+    final day = txnDate.toIso8601String().substring(0, 10);
+    final payloads = <Map<String, dynamic>>[];
+    if (kind == 'transfer') {
+      // Two legs, same amount/date, excluded from income/expense sums.
+      payloads.add({
+        'account_id': accountId,
+        'kind': 'transfer',
+        'amount': amt,
+        'txn_date': day,
+        'notes': notes.text.trim().isEmpty
+            ? 'transfer-out'
+            : '${notes.text.trim()} (out)',
+      });
+      payloads.add({
+        'account_id': toAccountId,
+        'kind': 'transfer',
+        'amount': amt,
+        'txn_date': day,
+        'notes': notes.text.trim().isEmpty
+            ? 'transfer-in'
+            : '${notes.text.trim()} (in)',
+      });
+    } else {
+      payloads.add({
+        'account_id': accountId,
+        'category_id': categoryId,
+        'kind': kind,
+        'amount': amt,
+        'txn_date': day,
+        'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
+      });
+    }
+    // Offline first: queue and sync on reconnect (ADR4 write queue).
+    if (ref.read(isOfflineProvider)) {
+      for (final p in payloads) {
+        await Outbox.enqueue(table: 'transactions', data: p);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Offline — queued, will sync on reconnect.'),
+        ));
+        Navigator.pop(context, true);
+      }
+      return;
+    }
     try {
       final client = Supabase.instance.client;
-      final day = txnDate.toIso8601String().substring(0, 10);
-      if (kind == 'transfer') {
-        // Two legs, same amount/date, excluded from income/expense sums.
-        final outData = {
-          'account_id': accountId,
-          'kind': 'transfer',
-          'amount': amt,
-          'txn_date': day,
-          'notes': notes.text.trim().isEmpty
-              ? 'transfer-out'
-              : '${notes.text.trim()} (out)',
-        };
-        final outRow = await client
-            .from('transactions')
-            .insert(outData)
-            .select('id')
-            .single();
-        await AuditLog.write(
-            table: 'transactions',
-            rowId: (outRow['id'] ?? '').toString(),
-            action: 'insert',
-            newData: outData);
-        final inData = {
-          'account_id': toAccountId,
-          'kind': 'transfer',
-          'amount': amt,
-          'txn_date': day,
-          'notes': notes.text.trim().isEmpty
-              ? 'transfer-in'
-              : '${notes.text.trim()} (in)',
-        };
-        final inRow = await client
-            .from('transactions')
-            .insert(inData)
-            .select('id')
-            .single();
-        await AuditLog.write(
-            table: 'transactions',
-            rowId: (inRow['id'] ?? '').toString(),
-            action: 'insert',
-            newData: inData);
-      } else {
-        final data = {
-          'account_id': accountId,
-          'category_id': categoryId,
-          'kind': kind,
-          'amount': amt,
-          'txn_date': day,
-          'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
-        };
+      for (final p in payloads) {
         final row = await client
             .from('transactions')
-            .insert(data)
+            .insert(p)
             .select('id')
             .single();
         await AuditLog.write(
             table: 'transactions',
             rowId: (row['id'] ?? '').toString(),
             action: 'insert',
-            newData: data);
+            newData: p);
       }
       ref.invalidate(accountsProvider);
+      ref.invalidate(transactionsProvider);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       setState(() => error = e.toString());
