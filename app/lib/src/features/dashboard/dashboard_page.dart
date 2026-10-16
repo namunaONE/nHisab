@@ -9,6 +9,7 @@ import '../accounts/accounts_provider.dart';
 import '../budgets/budgets_provider.dart';
 import '../categories/categories_provider.dart';
 import '../loans/loans_provider.dart';
+import '../notifications/notifications_button.dart';
 import '../transactions/transactions_provider.dart';
 
 class DashboardPage extends ConsumerWidget {
@@ -24,7 +25,10 @@ class DashboardPage extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('nHisab Dashboard')),
+      appBar: AppBar(
+        title: const Text('nHisab Dashboard'),
+        actions: const [NotificationsButton(), SizedBox(width: 8)],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [

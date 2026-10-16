@@ -6,6 +6,7 @@ import '../budgets/budgets_page.dart';
 import '../dashboard/dashboard_page.dart';
 import '../loans/loan_form.dart';
 import '../more/more_page.dart';
+import '../notifications/notifications_provider.dart';
 import '../parties/party_form.dart';
 import '../payments/payment_form.dart';
 import '../transactions/transactions_page.dart';
@@ -19,6 +20,24 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int idx = 0;
+  RealtimeChannel? _notifChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    // Realtime bell: invalidate notification providers on every change.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notifChannel = subscribeNotifications(ref);
+    });
+  }
+
+  @override
+  void dispose() {
+    if (_notifChannel != null) {
+      Supabase.instance.client.removeChannel(_notifChannel!);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

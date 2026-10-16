@@ -13,6 +13,7 @@ import '../loans/emi_schedule_page.dart';
 import '../loans/loan_form.dart';
 import '../loans/loan_model.dart';
 import '../loans/loans_provider.dart';
+import '../notifications/notifications_button.dart';
 
 class LedgerPage extends ConsumerWidget {
   const LedgerPage({super.key});
@@ -63,6 +64,8 @@ class LedgerPage extends ConsumerWidget {
             selected: {direction},
             onSelectionChanged: (s) => ref.read(directionFilterProvider.notifier).state = s.first,
           ),
+          const SizedBox(width: 8),
+          const NotificationsButton(),
           const SizedBox(width: 8),
           const UserMenu(),
           const SizedBox(width: 12),

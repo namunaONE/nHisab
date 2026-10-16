@@ -1,0 +1,26 @@
+-- 20261015170000 alert_cron (PENDING — apply via Dashboard/MCP after review)
+-- Daily dispatcher at 08:00 NPT via pg_cron + pg_net → Edge dispatch-alerts.
+-- Requires extensions pg_cron + pg_net and Vault secrets:
+--   Vault: project_url, service_role_key (used for Authorization header).
+-- Edge secrets (set in Dashboard > Edge Functions > Secrets):
+--   RESEND_API_KEY, SMS_API_KEY, SMS_SENDER.
+-- Deploy first: supabase functions deploy dispatch-alerts
+
+-- create extension if not exists pg_cron with schema extensions;
+-- create extension if not exists pg_net with schema extensions;
+
+-- select cron.schedule(
+--   'daily-loan-alerts',
+--   '0 8 * * *',
+--   $$
+--   select net.http_post(
+--     url := (select decrypted_secret from vault.decrypted_secrets where name = 'project_url')
+--       || '/functions/v1/dispatch-alerts',
+--     headers := jsonb_build_object(
+--       'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key'),
+--       'Content-Type', 'application/json'
+--     ),
+--     body := '{}'::jsonb
+--   );
+--   $$
+-- );
