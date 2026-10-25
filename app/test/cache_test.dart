@@ -14,6 +14,13 @@ void main() {
     await Outbox.init(path: tmp.path);
   });
 
+  setUp(() async {
+    await CacheService.reset();
+    await Outbox.clear();
+    await CacheService.setUser('test-user');
+    await Outbox.setUser('test-user');
+  });
+
   tearDownAll(() async {
     await Hive.close();
     await tmp.delete(recursive: true);
@@ -67,5 +74,33 @@ void main() {
     await Outbox.enqueue(
         table: 'transactions', data: {'amount': 100, 'kind': 'expense'});
     expect(Outbox.pendingCount, before + 1);
+  });
+
+  test('Cache is namespaced per user', () async {
+    await CacheService.setUser('alice');
+    await CacheService.writeMap('scope:test', {'owner': 'alice'});
+    expect(CacheService.readMap('scope:test')?['owner'], 'alice');
+
+    await CacheService.setUser('bob');
+    expect(CacheService.readMap('scope:test'), isNull);
+
+    await CacheService.setUser('alice');
+    expect(CacheService.readMap('scope:test')?['owner'], 'alice');
+  });
+
+  test('Outbox never exposes another user\'s queued writes', () async {
+    await Outbox.setUser('alice');
+    await Outbox.enqueue(
+        table: 'transactions', data: {'amount': 100, 'kind': 'expense'});
+    expect(Outbox.pendingCount, 1);
+
+    await Outbox.setUser('bob');
+    expect(Outbox.pendingCount, 0);
+    await Outbox.enqueue(
+        table: 'transactions', data: {'amount': 250, 'kind': 'expense'});
+    expect(Outbox.pendingCount, 1);
+
+    await Outbox.setUser('alice');
+    expect(Outbox.pendingCount, 1);
   });
 }

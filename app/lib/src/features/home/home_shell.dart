@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../auth/profiles_provider.dart';
 import '../auth/session_provider.dart';
 import '../budgets/budgets_page.dart';
 import '../dashboard/dashboard_page.dart';
@@ -68,6 +69,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       MorePage(),
     ];
     final offline = ref.watch(isOfflineProvider);
+    final canWrite = ref.watch(canWriteProvider);
     return Scaffold(
       body: Column(
         children: [
@@ -85,7 +87,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Offline — showing cached data. New entries queue and sync on reconnect.',
+                      'Offline - showing cached data. Some entries queue; payments require a connection.',
                       style: TextStyle(
                         fontSize: 12,
                         color:
@@ -114,7 +116,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
         ],
       ),
-      floatingActionButton: idx == 1
+      floatingActionButton: idx == 1 && canWrite
           ? Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -143,8 +145,9 @@ class UserMenu extends ConsumerWidget {
       ],
       onSelected: (v) async {
         if (v == 'out') {
-          await Supabase.instance.client.auth.signOut();
+          await signOutAndClear();
           ref.invalidate(authStateProvider);
+          ref.invalidate(profileProvider);
         }
       },
     );

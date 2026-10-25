@@ -19,12 +19,48 @@ class LoanCalculator {
     }
   }
 
+  /// Whole days accrued since [start]. Never negative.
+  ///
+  /// A loan that starts in the future has zero accrued interest. Using
+  /// `abs()` here used to accrue interest backwards before disbursement.
   static int dueDays({required DateTime start, required DateTime today}) {
-    return today.difference(DateTime(start.year, start.month, start.day)).inDays.abs();
+    final days =
+        today.difference(DateTime(start.year, start.month, start.day)).inDays;
+    return days < 0 ? 0 : days;
   }
 
   static bool isProjected({required DateTime start, required DateTime today}) {
     return start.isAfter(DateTime(today.year, today.month, today.day));
+  }
+
+  /// Civil Code 2074 s.481 caps cumulative interest at the principal.
+  /// Keep the raw accrual visible for reconciliation, but never charge more
+  /// than the principal as interest.
+  static double cappedInterest({
+    required double principal,
+    required double interestAmount,
+  }) {
+    if (principal <= 0 || interestAmount <= 0) return 0;
+    return math.min(round2(interestAmount), round2(principal));
+  }
+
+  /// Interest still unpaid. Principal payments must not reduce this figure.
+  static double dues({
+    required double interest,
+    required double interestPaid,
+  }) {
+    final remaining = round2(interest - interestPaid);
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  /// Total outstanding = unpaid principal + unpaid interest.
+  static double outstanding({
+    required double principal,
+    required double interest,
+    required double totalPaid,
+  }) {
+    final remaining = round2(principal + interest - totalPaid);
+    return remaining < 0 ? 0 : remaining;
   }
 
   static double perDay({
@@ -68,18 +104,45 @@ class LoanCalculator {
   }
 
   /// Interest-first split for a payment on date D.
-  static ({double interestPart, double principalPart}) splitPayment({
+  ///
+  /// [principal] and [prevPrincipalPaid] are optional. When supplied, accrued
+  /// interest is capped at the principal (Civil Code s.481) and the principal
+  /// portion cannot exceed the unpaid principal. Any money left over is
+  /// returned as [excess] so the caller can reject an overpayment instead of
+  /// silently discarding it.
+  static ({double interestPart, double principalPart, double excess})
+      splitPayment({
     required double payment,
     required double perDayAmount,
     required DateTime start,
     required DateTime payDate,
     required double prevInterestPaid,
+    double? principal,
+    double prevPrincipalPaid = 0,
   }) {
-    final days = payDate.difference(DateTime(start.year, start.month, start.day)).inDays.abs();
-    final interestDue = round2(perDayAmount * days);
-    final remainingInterest = (interestDue - prevInterestPaid).clamp(0, double.infinity).toDouble();
+    final days = dueDays(start: start, today: payDate);
+    var interestDue = round2(perDayAmount * days);
+    if (principal != null && principal > 0) {
+      interestDue =
+          cappedInterest(principal: principal, interestAmount: interestDue);
+    }
+    final remainingInterest =
+        (interestDue - prevInterestPaid).clamp(0, double.infinity).toDouble();
     final interestPart = payment.clamp(0, remainingInterest).toDouble();
-    final principalPart = round2(payment - interestPart);
-    return (interestPart: round2(interestPart), principalPart: principalPart);
+    final requestedPrincipal = round2(payment - interestPart);
+    var principalPart = requestedPrincipal;
+    if (principal != null && principal > 0) {
+      final unpaidPrincipal =
+          (principal - prevPrincipalPaid).clamp(0, double.infinity).toDouble();
+      if (principalPart > unpaidPrincipal) {
+        principalPart = round2(unpaidPrincipal);
+      }
+    }
+    final excess = round2(payment - interestPart - principalPart);
+    return (
+      interestPart: round2(interestPart),
+      principalPart: round2(principalPart),
+      excess: excess < 0 ? 0 : excess,
+    );
   }
 }

@@ -20,6 +20,26 @@ Future<void> _initSupabase() async {
   }
 }
 
+Future<void> _pumpGate(WidgetTester tester, Profile? profile) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        authStateProvider.overrideWith(
+          (ref) => Stream.value(
+            const AuthState(AuthChangeEvent.signedIn, null),
+          ),
+        ),
+        sessionProvider.overrideWithValue(_fakeSession()),
+        profileProvider.overrideWith((ref) async => profile),
+      ],
+      child: const MaterialApp(
+        home: AuthGate(child: Text('home')),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUpAll(_initSupabase);
 
@@ -106,6 +126,73 @@ void main() {
 
     expect(find.textContaining('View-only mode'), findsOneWidget);
     expect(find.text('home'), findsOneWidget);
+  });
+
+  testWidgets('Authenticated user with no profile is blocked', (tester) async {
+    await _pumpGate(tester, null);
+
+    expect(find.text('Account not provisioned'), findsOneWidget);
+    expect(find.text('home'), findsNothing);
+  });
+
+  testWidgets('Unknown role is blocked instead of falling back to owner',
+      (tester) async {
+    await _pumpGate(
+      tester,
+      Profile(
+        id: 'u3',
+        displayName: 'Mystery',
+        role: 'superuser',
+        tenantId: 't1',
+        createdAt: DateTime(2026, 1, 1),
+      ),
+    );
+
+    expect(find.text('Unknown role'), findsOneWidget);
+    expect(find.text('home'), findsNothing);
+  });
+
+  testWidgets('Profile without a tenant is blocked', (tester) async {
+    await _pumpGate(
+      tester,
+      Profile(
+        id: 'u4',
+        displayName: 'No Org',
+        role: 'owner',
+        tenantId: '',
+        createdAt: DateTime(2026, 1, 1),
+      ),
+    );
+
+    expect(find.text('No organisation'), findsOneWidget);
+    expect(find.text('home'), findsNothing);
+  });
+
+  test('canWriteProvider is true only for writer roles', () async {
+    Future<bool> canWrite(String role) async {
+      final container = ProviderContainer(
+        overrides: [
+          profileProvider.overrideWith(
+            (ref) async => Profile(
+              id: 'u5',
+              displayName: 'Tester',
+              role: role,
+              tenantId: 't1',
+              createdAt: DateTime(2026, 1, 1),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(profileProvider.future);
+      return container.read(canWriteProvider);
+    }
+
+    expect(await canWrite('owner'), isTrue);
+    expect(await canWrite('manager'), isTrue);
+    expect(await canWrite('viewer'), isFalse);
+    expect(await canWrite('superuser'), isFalse);
+    expect(await canWrite('unknown'), isFalse);
   });
 }
 

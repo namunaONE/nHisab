@@ -228,6 +228,8 @@ class PartyStatementPage extends ConsumerWidget {
         return 'Payment';
       case 'interest_accrual':
         return 'Interest Accrued';
+      case 'write_off':
+        return 'Write-off';
       default:
         return type;
     }
@@ -258,6 +260,8 @@ class PartyStatementPage extends ConsumerWidget {
           pw.Text('Total Repaid: ${fmt.format(stmt.totalPrincipalPaid + stmt.totalInterestPaid)}'),
           pw.Text(
               'Interest Due: ${fmt.format(stmt.totalInterestAccrued - stmt.totalInterestPaid)}'),
+          if (stmt.totalWrittenOff > 0)
+            pw.Text('Written off: ${fmt.format(stmt.totalWrittenOff)}'),
           pw.Text('Outstanding: ${fmt.format(stmt.outstanding)}',
               style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 12),

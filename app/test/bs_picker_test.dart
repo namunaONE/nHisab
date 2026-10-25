@@ -36,4 +36,21 @@ void main() {
     expect(BsPicker.preview(DateTime(2026, 10, 15), false), '2026/10/15');
     expect(BsPicker.preview(DateTime(2026, 10, 15), true), '2083-06-29 BS');
   });
+
+  // Regression: CI runs in UTC. Converting BS midnight via `toDateTime()`
+  // yielded the previous AD day there, which made the picked date one day
+  // early. These helpers must be pure civil-date conversions.
+  test('Civil-date helpers are timezone independent', () {
+    final bs = BsPicker.bsFromAd(DateTime(2026, 10, 15));
+    expect((bs.year, bs.month, bs.day), (2083, 6, 29));
+    expect(BsPicker.adFromBs(bs), DateTime(2026, 10, 15));
+
+    final bsUtc = BsPicker.bsFromAd(DateTime.utc(2026, 10, 15));
+    expect((bsUtc.year, bsUtc.month, bsUtc.day), (2083, 6, 29));
+
+    expect(
+      BsPicker.adFromBs(BikramSambat(2083, 6, 15)),
+      DateTime(2026, 10, 1),
+    );
+  });
 }

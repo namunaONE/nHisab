@@ -21,6 +21,11 @@ Future<void> main() async {
     await Outbox.init();
   } catch (_) {}
   await Supabase.initialize(url: supaUrl, publishableKey: supaAnon);
+  // Cache and outbox are namespaced per user so a shared device cannot leak
+  // one account's rows or replay its queued writes under another account.
+  final userId = Supabase.instance.client.auth.currentUser?.id;
+  await CacheService.setUser(userId);
+  await Outbox.setUser(userId);
   runApp(const ProviderScope(child: NHisabApp()));
 }
 

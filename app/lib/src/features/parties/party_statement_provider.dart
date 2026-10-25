@@ -30,21 +30,23 @@ final partyStatementProvider = FutureProvider.family<PartyStatement, String>(
     // Fetch all loans for this party
     final loansRes = await client
         .from('loans')
-        .select(
-            'id, principal_amount, rate, rate_type, day_base, start_date, direction, status')
+        .select('*')
         .eq('party_id', partyId)
         .filter('deleted_at', 'is', null)
         .order('start_date');
     final loans = (loansRes as List);
 
-    // Fetch all payments for these loans
+    // Fetch only payments that belong to this party's loans. The previous
+    // query fetched every payment in the tenant and then ignored the ones
+    // without a matching loan, which was both wasteful and a cross-party
+    // data exposure in the UI layer.
     final loanIds = loans.map((r) => r['id'] as String).toList();
     List payments = [];
     if (loanIds.isNotEmpty) {
       final paysRes = await client
           .from('payments')
-          .select(
-              'id, loan_id, payment_date, total_amount, interest_amount, principal_amount')
+          .select('*')
+          .inFilter('loan_id', loanIds)
           .filter('deleted_at', 'is', null);
       payments = (paysRes as List);
     }
@@ -78,6 +80,7 @@ final partyStatementProvider = FutureProvider.family<PartyStatement, String>(
     double totalPrincipalPaid = 0;
     double totalInterestAccrued = 0;
     double totalInterestPaid = 0;
+    double totalWrittenOff = 0;
 
     for (final l in loans) {
       final loanId = l['id'] as String;
@@ -87,16 +90,31 @@ final partyStatementProvider = FutureProvider.family<PartyStatement, String>(
       final dayBase = (l['day_base'] as num?)?.toInt() ?? 360;
       final startDate = DateTime.parse(l['start_date'] as String);
       final direction = l['direction'] as String;
+      final writeOff = (l['write_off_amount'] as num?)?.toDouble() ?? 0;
 
       totalPrincipal += principal;
+      totalWrittenOff += writeOff;
 
-      // Interest accrued up to Today
+      // Closed loans freeze accrual at accrual_end_date. The column is
+      // introduced with the hardening migration; `*` keeps this read path
+      // compatible before it is applied.
+      final accrualEnd = DateTime.tryParse(
+          (l['accrual_end_date'] ?? '').toString());
+      final effectiveToday = accrualEnd != null && accrualEnd.isBefore(today)
+          ? accrualEnd
+          : today;
+
+      // Interest accrued up to the last accrual day
       final annual = LoanCalculator.annualRate(rate: rate, rateType: rateType);
       final perDay = LoanCalculator.perDay(
           principal: principal, annualRateDecimal: annual, dayBase: dayBase);
-      final dueDays = LoanCalculator.dueDays(start: startDate, today: today);
-      final interestAccrued =
-          LoanCalculator.interest(perDayAmount: perDay, dueDaysCount: dueDays);
+      final dueDays =
+          LoanCalculator.dueDays(start: startDate, today: effectiveToday);
+      final interestAccrued = LoanCalculator.cappedInterest(
+        principal: principal,
+        interestAmount:
+            LoanCalculator.interest(perDayAmount: perDay, dueDaysCount: dueDays),
+      );
       totalInterestAccrued += interestAccrued;
 
       // Loan disbursal row
@@ -135,15 +153,31 @@ final partyStatementProvider = FutureProvider.family<PartyStatement, String>(
       }
 
       // Interest accrual row (net interest not yet paid)
-      final interestDue = interestAccrued - loanInterestPaid;
+      final interestDue =
+          LoanCalculator.dues(interest: interestAccrued, interestPaid: loanInterestPaid);
       if (interestDue > 0.01) {
         rows.add(StatementRow(
           id: 'interest-$loanId',
-          date: today,
+          date: effectiveToday,
           type: 'interest_accrual',
           description: 'Interest Accrued to Date',
           debit: direction == 'receivable' ? interestDue : 0,
           credit: direction == 'payable' ? interestDue : 0,
+          balance: 0,
+        ));
+      }
+
+      // A write-off is a non-cash credit that clears the remaining balance.
+      // Keeping it as a statement row makes the running total reconcile with
+      // the outstanding figure instead of silently disappearing.
+      if (writeOff > 0.01) {
+        rows.add(StatementRow(
+          id: 'writeoff-$loanId',
+          date: effectiveToday,
+          type: 'write_off',
+          description: 'Balance written off',
+          debit: direction == 'payable' ? writeOff : 0,
+          credit: direction == 'receivable' ? writeOff : 0,
           balance: 0,
         ));
       }
@@ -180,8 +214,11 @@ final partyStatementProvider = FutureProvider.family<PartyStatement, String>(
       ));
     }
 
-    final outstanding =
-        totalPrincipal - totalPrincipalPaid + totalInterestAccrued - totalInterestPaid;
+    final outstanding = LoanCalculator.outstanding(
+      principal: totalPrincipal,
+      interest: totalInterestAccrued,
+      totalPaid: totalPrincipalPaid + totalInterestPaid + totalWrittenOff,
+    );
 
     return PartyStatement(
       partyId: partyId,
@@ -193,6 +230,7 @@ final partyStatementProvider = FutureProvider.family<PartyStatement, String>(
       totalPrincipalPaid: totalPrincipalPaid,
       totalInterestAccrued: totalInterestAccrued,
       totalInterestPaid: totalInterestPaid,
+      totalWrittenOff: totalWrittenOff,
       outstanding: outstanding,
       rows: balancedRows,
       asOfDate: today,

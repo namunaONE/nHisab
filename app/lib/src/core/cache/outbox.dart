@@ -12,6 +12,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class Outbox {
   static const String boxName = 'nhisab_outbox';
   static bool _ready = false;
+  static String? _userId;
+
+  static String get scope => _userId ?? 'anon';
+
+  /// Switch the replay namespace. Entries carry the user id they were queued
+  /// under; [flush] only replays the current user's entries. That prevents a
+  /// second account on a shared device from posting the first account's
+  /// transactions into its own tenant.
+  static Future<void> setUser(String? userId) async {
+    _userId = userId;
+  }
 
   static Future<void> init({String? path}) async {
     if (_ready) return;
@@ -26,6 +37,11 @@ class Outbox {
 
   static Box get _box => Hive.box(boxName);
 
+  static bool _belongsToCurrentScope(Object? entry) {
+    if (entry is! Map) return false;
+    return (entry['user_id'] ?? 'anon').toString() == scope;
+  }
+
   /// Queue a failed insert for later replay. Returns the queue key.
   static Future<int> enqueue({
     required String table,
@@ -36,14 +52,25 @@ class Outbox {
     return _box.add({
       'table': table,
       'data': clean,
+      'user_id': scope,
       'queuedAt': DateTime.now().toIso8601String(),
     });
   }
 
-  static int get pendingCount => _ready ? _box.length : 0;
+  static int get pendingCount {
+    if (!_ready) return 0;
+    return _box.values.where(_belongsToCurrentScope).length;
+  }
 
-  /// Replay all queued inserts in FIFO order. Returns (flushed, failed).
-  /// Entries that succeed are deleted; failures stay queued.
+  /// Test/admin helper: remove every queued entry on this device.
+  static Future<void> clear() async {
+    if (!_ready) return;
+    await _box.clear();
+  }
+
+  /// Replay the current user's queued inserts in FIFO order.
+  /// Returns (flushed, failed). Entries that succeed are deleted; failures stay
+  /// queued. Other users' entries are left untouched.
   static Future<({int flushed, int failed})> flush() async {
     if (!_ready) return (flushed: 0, failed: 0);
     final client = Supabase.instance.client;
@@ -52,6 +79,7 @@ class Outbox {
     final keys = _box.keys.toList();
     for (final k in keys) {
       final entry = _box.get(k);
+      if (!_belongsToCurrentScope(entry)) continue;
       if (entry is! Map) {
         await _box.delete(k);
         continue;

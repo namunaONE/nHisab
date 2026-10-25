@@ -11,8 +11,21 @@ import 'package:hive_flutter/hive_flutter.dart';
 class CacheService {
   static const String boxName = 'nhisab_cache';
   static bool _ready = false;
+  static String? _userId;
 
   static bool get isReady => _ready;
+
+  /// Current cache namespace. `anon` is used before sign-in and in tests.
+  static String get scope => _userId ?? 'anon';
+
+  /// Switch the cache to a user's namespace.
+  ///
+  /// The previous user's keys stay on disk but can never be read by another
+  /// user because every public key is prefixed with this scope. Cleared
+  /// automatically by [reset] and on sign-out (scope returns to `anon`).
+  static Future<void> setUser(String? userId) async {
+    _userId = userId;
+  }
 
   static Future<void> init({String? path}) async {
     if (_ready) return;
@@ -32,6 +45,8 @@ class CacheService {
   }
 
   static Box get _box => Hive.box(boxName);
+
+  static String _key(String key) => 'u:$scope:$key';
 
   /// Fetch fresh rows, cache them, and return them. On network failure,
   /// return the last cached rows (possibly empty) with [fromCache]=true.
@@ -56,7 +71,7 @@ class CacheService {
   static Future<void> writeRaw(String key, List rows) async {
     if (!_ready) return;
     try {
-      await _box.put(key, {
+      await _box.put(_key(key), {
         'savedAt': DateTime.now().toIso8601String(),
         'rows': rows,
       });
@@ -68,7 +83,7 @@ class CacheService {
   static ({List rows, DateTime? savedAt})? readRaw(String key) {
     if (!_ready) return null;
     try {
-      final v = _box.get(key);
+      final v = _box.get(_key(key));
       if (v is! Map) return null;
       final rows = v['rows'];
       if (rows is! List) return null;
@@ -103,7 +118,7 @@ class CacheService {
   static Future<void> writeMap(String key, Map<String, dynamic> map) async {
     if (!_ready) return;
     try {
-      await _box.put(key, {
+      await _box.put(_key(key), {
         'savedAt': DateTime.now().toIso8601String(),
         'map': map,
       });
@@ -115,7 +130,7 @@ class CacheService {
   static Map<String, dynamic>? readMap(String key) {
     if (!_ready) return null;
     try {
-      final v = _box.get(key);
+      final v = _box.get(_key(key));
       if (v is! Map) return null;
       final m = v['map'];
       if (m is! Map) return null;

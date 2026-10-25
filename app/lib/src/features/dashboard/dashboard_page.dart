@@ -138,6 +138,9 @@ class DashboardPage extends ConsumerWidget {
               final incomeByM = List.filled(6, 0.0);
               final expenseByM = List.filled(6, 0.0);
               for (final t in txns) {
+                // Loan principal is a balance-sheet movement, not income or
+                // expense; interest legs remain in cashflow.
+                if (t.excludedFromCashflow) continue;
                 final mi = (t.date.year - months.first.year) * 12 +
                     (t.date.month - months.first.month);
                 if (mi < 0 || mi > 5) continue;

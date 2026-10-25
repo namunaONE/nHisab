@@ -2,16 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nhisab/src/core/budget/budget_calculator.dart';
 
 void main() {
-  test('Account balance signs income/expense, ignores transfer', () {
+  test('Account balance signs income/expense and both transfer legs', () {
     final b = BudgetCalculator.accountBalance(
       opening: 10000,
       txns: [
-        (kind: 'income', amount: 5000),
-        (kind: 'expense', amount: 2000),
-        (kind: 'transfer', amount: 9999),
+        (kind: 'income', amount: 5000, transferDirection: null),
+        (kind: 'expense', amount: 2000, transferDirection: null),
+        (kind: 'transfer', amount: 9999, transferDirection: 'out'),
+        (kind: 'transfer', amount: 3000, transferDirection: 'in'),
+        // Legacy transfer rows had no direction and must stay neutral.
+        (kind: 'transfer', amount: 777, transferDirection: null),
       ],
     );
-    expect(b, 13000.0);
+    expect(b, 6001.0);
   });
 
   test('Budget remaining clamps, overspend flags', () {

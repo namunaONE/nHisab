@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/skeleton.dart';
+import '../auth/profiles_provider.dart';
 import 'notification_model.dart';
 import 'notifications_provider.dart';
 
@@ -12,25 +13,27 @@ class NotificationsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifsAsync = ref.watch(notificationsProvider);
+    final canWrite = ref.watch(canWriteProvider);
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
         actions: [
-          TextButton(
-            onPressed: () async {
-              await Supabase.instance.client
-                  .from('notification_queue')
-                  .update({
-                    'status': 'sent',
-                    'sent_at': DateTime.now().toIso8601String(),
-                  })
-                  .eq('status', 'pending');
-              ref.invalidate(notificationsProvider);
-            },
-            child: const Text('Mark all read'),
-          ),
+          if (canWrite)
+            TextButton(
+              onPressed: () async {
+                await Supabase.instance.client
+                    .from('notification_queue')
+                    .update({
+                      'status': 'sent',
+                      'sent_at': DateTime.now().toIso8601String(),
+                    })
+                    .eq('status', 'pending');
+                ref.invalidate(notificationsProvider);
+              },
+              child: const Text('Mark all read'),
+            ),
         ],
       ),
       body: notifsAsync.when(
@@ -69,7 +72,7 @@ class NotificationsPage extends ConsumerWidget {
                   '${_channelLabel(n.channel)} • ${_statusLabel(n.status)}'
                   '${n.partyName != null ? ' • ${n.partyName}' : ''}',
                 ),
-                trailing: n.isUnread
+                trailing: canWrite && n.isUnread
                     ? IconButton(
                         icon:
                             const Icon(Icons.mark_email_read_outlined, size: 20),

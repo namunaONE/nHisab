@@ -6,20 +6,36 @@ import '../money/money.dart';
 class BudgetCalculator {
   static double round2(double v) => (v * 100).round() / 100;
 
-  /// Signed sum: income +, expense -. Transfers excluded by caller.
-  static double signedSum({required String kind, required double amount}) {
+  /// Signed wallet movement: income +, expense -, transfer-in +,
+  /// transfer-out -. A transfer with no direction contributes 0 (legacy rows
+  /// created before `transfer_direction` existed).
+  static double signedSum({
+    required String kind,
+    required double amount,
+    String? transferDirection,
+  }) {
     if (kind == 'income') return amount;
     if (kind == 'expense') return -amount;
+    if (kind == 'transfer') {
+      if (transferDirection == 'in') return amount;
+      if (transferDirection == 'out') return -amount;
+    }
     return 0;
   }
 
   static double accountBalance({
     required double opening,
-    required List<({String kind, double amount})> txns,
+    required List<
+            ({String kind, double amount, String? transferDirection})>
+        txns,
   }) {
     final signed = <double>[opening];
     for (final t in txns) {
-      signed.add(signedSum(kind: t.kind, amount: t.amount));
+      signed.add(signedSum(
+        kind: t.kind,
+        amount: t.amount,
+        transferDirection: t.transferDirection,
+      ));
     }
     return Money.sum2(signed);
   }

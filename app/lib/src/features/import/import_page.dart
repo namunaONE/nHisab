@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/budget/budget_calculator.dart';
 import '../../core/calculator/loan_calculator.dart';
 import '../accounts/accounts_provider.dart';
+import '../auth/profiles_provider.dart';
 import '../budgets/budgets_provider.dart';
 import '../loans/loans_provider.dart';
 import '../parties/parties_provider.dart';
@@ -142,9 +143,20 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       final annual = LoanCalculator.annualRate(rate: l.rate, rateType: l.rateType);
       final days = LoanCalculator.dueDays(start: l.startDate, today: today);
       final per = LoanCalculator.perDay(principal: l.principal, annualRateDecimal: annual, dayBase: l.dayBase);
-      final interest = LoanCalculator.interest(perDayAmount: per, dueDaysCount: days);
-      final dues = (interest - l.paid).clamp(0, double.infinity).toDouble();
-      final total = LoanCalculator.total(principal: l.principal, interestAmount: interest, paid: l.paid);
+      final interest = LoanCalculator.cappedInterest(
+        principal: l.principal,
+        interestAmount:
+            LoanCalculator.interest(perDayAmount: per, dueDaysCount: days),
+      );
+      final dues = LoanCalculator.dues(
+        interest: interest,
+        interestPaid: l.interestPaid,
+      );
+      final total = LoanCalculator.outstanding(
+        principal: l.principal,
+        interest: interest,
+        totalPaid: l.paid,
+      );
       sheet.appendRow([
         IntCellValue(sn),
         TextCellValue('${l.startDate.year}/${l.startDate.month}/${l.startDate.day}'),
@@ -181,9 +193,20 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       final annual = LoanCalculator.annualRate(rate: l.rate, rateType: l.rateType);
       final days = LoanCalculator.dueDays(start: l.startDate, today: today);
       final per = LoanCalculator.perDay(principal: l.principal, annualRateDecimal: annual, dayBase: l.dayBase);
-      final interest = LoanCalculator.interest(perDayAmount: per, dueDaysCount: days);
-      final dues = (interest - l.paid).clamp(0, double.infinity).toDouble();
-      final total = LoanCalculator.total(principal: l.principal, interestAmount: interest, paid: l.paid);
+      final interest = LoanCalculator.cappedInterest(
+        principal: l.principal,
+        interestAmount:
+            LoanCalculator.interest(perDayAmount: per, dueDaysCount: days),
+      );
+      final dues = LoanCalculator.dues(
+        interest: interest,
+        interestPaid: l.interestPaid,
+      );
+      final total = LoanCalculator.outstanding(
+        principal: l.principal,
+        interest: interest,
+        totalPaid: l.paid,
+      );
       ledger.appendRow([
         IntCellValue(sn),
         TextCellValue('${l.startDate.year}/${l.startDate.month}/${l.startDate.day}'),
@@ -252,6 +275,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
     var cashIn = 0.0;
     var cashOut = 0.0;
     for (final t in txns) {
+      if (t.excludedFromCashflow) continue;
       if (t.kind == 'income') {
         cashIn += t.amount;
       } else if (t.kind == 'expense') {
@@ -290,6 +314,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
 
   @override
   Widget build(BuildContext context) {
+    final canWrite = ref.watch(canWriteProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Import / Export')),
       body: Padding(
@@ -298,10 +323,12 @@ class _ImportPageState extends ConsumerState<ImportPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text('21 rows transcribed from sheet. Group A 57L, Group B 85713900 (Row4 fixed missing zero), Group C 42.6L.'),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: busy ? null : seed21, child: Text(busy ? 'Working...' : 'Seed 21 rows to Supabase')),
-            const SizedBox(height: 8),
-            OutlinedButton(onPressed: busy ? null : pickExcel, child: const Text('Import Excel .xlsx (Date, Party, Amount, Rate)')),
+            if (canWrite) ...[
+              const SizedBox(height: 12),
+              FilledButton(onPressed: busy ? null : seed21, child: Text(busy ? 'Working...' : 'Seed 21 rows to Supabase')),
+              const SizedBox(height: 8),
+              OutlinedButton(onPressed: busy ? null : pickExcel, child: const Text('Import Excel .xlsx (Date, Party, Amount, Rate)')),
+            ],
             const SizedBox(height: 8),
             OutlinedButton(onPressed: busy ? null : exportExcel, child: const Text('Export current ledger to Excel')),
             const SizedBox(height: 8),

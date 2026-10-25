@@ -1,40 +1,125 @@
-# 13 - Codebase Standards: Structure, Clean Files, Avoid Bugs
+# 13 - Codebase Standards
 
-Actual 2026-10-15: app/lib 20 dart files, feature-first flat, Riverpod FutureProvider + StateProvider, flutter_lints only, analyze 0 errors 8 infos, test 1 file 2/2.
+Actual 2026-10-25: feature-first Flutter app, Riverpod, `flutter_lints` 6,
+`flutter analyze` clean, 49 tests under UTC plus 7 calendar tests under Nepal
+time. SQL migrations and verification live under `supabase/`.
 
-## 1. Folder Structure - Feature-First
+## 1. Folder Structure
+
 ```
-lib/main.dart (Supabase init + AuthGate + HomeShell only)
-lib/src/core/calculator|theme|dates (pure, no Flutter deps except theme/dates)
-lib/src/features/auth|home|loans|parties|payments|import (per feature: provider + page + form + model)
-test/ mirrors lib: test/loan_calculator_test.dart
-supabase/migrations/*.sql exported remote
-docs/01-13
+lib/main.dart                     Supabase init, AuthGate, HomeShell
+lib/src/core/
+  calculator/                     pure loan math
+  money/                          Decimal-exact helpers
+  dates/                          AD/BS civil-date conversion
+  budget/                         pure wallet/budget math
+  cache/                          Hive read cache + outbox
+  audit/                          client audit writer (ordinary writes)
+lib/src/features/<feature>/
+  *_page.dart                     screen
+  *_form.dart                     dialog/form
+  *_provider.dart                 Riverpod providers
+  *_model.dart                    plain models
+test/                             mirrors lib; unit + widget tests
+supabase/migrations/              ordered SQL, no explicit BEGIN/COMMIT
+supabase/verify/                  read-only checks + staging smoke test
+docs/                             design, runbook, API, hardening plan
 ```
-Rules from 2025 guides: feature folders own their UI+state, core holds shared pure logic, no cross-feature imports except via providers. Riverpod lives in presentation + core only. Add per-feature data/ later when repository layer needed. Add barrel index.dart per folder when imports exceed 3 lines. Mirror test/ path per lib file.
 
-Gap: go_router + fl_chart installed not wired, hive/connectivity installed not wired, no supabase/ CLI link, no assets/ folder. Either wire or remove to avoid dead deps.
+Rules:
 
-## 2. Keep Files Clean, Short, Expandable
-- One widget per file for dialogs/pages, max ~150 lines. Current loan_form 130, payment_form 106, import_page 170 - split import_page into seed_service + excel_service + page next.
-- Pure functions in calculator, no BuildContext. Models as simple classes LoanRow/Party/PaymentRow, add freezed/json_serializable only when boilerplate hurts.
-- Providers small: todayProvider, directionFilter, loansProvider with deleted_at filter. No global mutable singletons except Supabase client.
-- No hardcoded hex outside app_theme, no hardcoded TextStyle sizes outside theme, use scheme + textTheme roles.
-- Name consistently: *_page.dart screens, *_form.dart dialogs, *_provider.dart riverpod, loan_model.dart singular.
+- Feature folders own their UI/state; `core` holds pure logic and cross-cutting
+  infrastructure.
+- No cross-feature imports except through providers/models.
+- One page/form/dialog per file where practical. Split a file before it exceeds
+  roughly 250 lines.
+- No new global mutable singleton except the Supabase client and Hive boxes.
 
-## 3. Avoid Bugs on Flutter
-- Always flutter analyze before commit. Current 8 infos are deprecated anonKey/value - track migration to publishableKey/initialValue, do not add new ignores without comment.
-- Upgrade path: very_good_analysis over flutter_lints for 100+ rules, enable missing_return + missing_required_param as error, keep parameter_assignments warning. Run dart fix where safe, flutter pub upgrade --major-versions in branch.
-- Null safety: prefer final, required named params, handle (parties as Map?) null with fallback '-', never dynamic calls without cast. Avoid empty catch, log to notification_queue/crash hook.
-- Async: avoid async void except callbacks, check mounted before setState after await - already done in forms. Invalidate providers after insert/delete.
-- Tests: every calculator change needs assertion, no tests without expect, no duplicate assertions. Add zero-rate, 365 base, split with prev sum, abs future cases. Add RLS tests as two users, widget test for AuthGate login->ledger.
-- Common pitfalls hit here: const with non-const TextCellValue fixed, widget_test MyApp deleted after rename to NHisabApp, pub version bikram_sambat 0.0.2 nonexistent fixed to 1.2.0 via pub.dev check, build timeout 120s fixed with 600s + --no-wasm-dry-run.
-- Caches: flutter clean + pub get on EventChannel/pub-cache corruption, flutter pub cache repair for internals missing.
-- Layout: no hardcoded heights in ledger, DataTable2 minWidth 1400 + horizontal scroll, dialogs SingleChildScrollView, test RenderFlex on small device.
+## 2. Money Rules
 
-## 4. Workflow Checklist
-- [ ] Enable stricter lints, fix 8 infos to 0.
-- [ ] Split import_page, add seed_service guard test, add deleted_at filter test per provider.
-- [ ] Add test mirroring lib/src structure.
-- [ ] Remove or wire go_router/fl_chart/hive/connectivity.
-- [ ] Document ADRs for structure choices in docs/10.
+- The database is the source of truth; the browser previews but does not post
+  allocations.
+- Payments, voids and loan closes go through RPCs. Do not add a direct
+  `from('payments').insert/update` path.
+- Every new payment call must send a fresh `client_id` UUID. Reuse only for a
+  retry of the identical request.
+- Interest-first, cap cumulative interest at principal, reject overpayment.
+  Mirror any change in `loan_calculator.dart` and the SQL RPC in the same
+  release, with tests.
+- Never use `abs()` for dates; use civil dates. Future loans accrue zero.
+- `dues` is unpaid interest; `outstanding` is unpaid principal + unpaid interest.
+  Do not conflate them with `total_paid`.
+- Principal wallet legs are excluded from cashflow. Transfers carry a direction.
+- Money writes fail closed offline. Do not add a guessed allocation fallback.
+
+## 3. Security Rules
+
+- Never write `tenant_id`, `profiles.role`, `loans.status`,
+  `transactions.payment_id`, void fields or close fields from the client.
+- Add per-operation RLS and minimum column grants for any new table. Do not use
+  `for all` or table-level `GRANT ALL TO authenticated`.
+- Definer functions: `set search_path = ''`, fully qualified names, repeat tenant
+  and role checks, and revoke `public`/`anon`.
+- `anon` must have no table, sequence or function grants.
+- Do not put a service-role key in the Flutter bundle, GitHub Pages or logs.
+- New auth states fail closed. Missing profile, empty tenant or unknown role must
+  never fall through to the app.
+- Viewer UI gating is not enough; verify the database denies the write.
+- Audit rows for ordinary writes are client-generated. For money, write audit in
+  the RPC.
+
+## 4. Flutter Practices
+
+- Run `flutter analyze` before every commit. Keep it at zero issues.
+- Prefer `final`, required named parameters, explicit casts and null checks.
+  Avoid empty `catch` blocks; cache failures may be swallowed, money failures may
+  not.
+- Check `mounted` before `setState` after an `await`.
+- Invalidate providers after writes and on auth changes.
+- Use the theme's color scheme and text roles; no hardcoded hex outside
+  `app_theme.dart`.
+- Do not use local-midnight `DateTime` arithmetic for BS conversion. Use the
+  civil-date helpers and run the calendar tests under two time zones.
+- Cache keys must be user-namespaced. The outbox must only flush the current
+  user's entries.
+- Keep the ledger responsive: DataTable2 min width + horizontal scroll on
+  desktop, card layout on mobile, dialogs scrollable.
+
+## 5. SQL and Migration Practices
+
+- One migration file per change, timestamped, applied in order.
+- Do not add explicit `BEGIN`/`COMMIT`; the Supabase runner owns the transaction.
+- Expand/contract for breaking changes: add columns and compatibility first,
+  deploy the client, then revoke old paths.
+- Use `add column if not exists` and defensive `do $$` blocks for partially
+  applied environments.
+- Validate with `libpg-query` and a disposable PostgreSQL before applying.
+- Add a read-only check to `supabase/verify/security_checks.sql` for every new
+  privilege invariant.
+- `smoke_test.sql` is staging-only and must roll back.
+- No hard deletes for financial rows. Soft delete via `deleted_at`.
+
+## 6. Tests
+
+- Every calculator change needs an assertion for the changed branch.
+- Keep zero-rate, 365-day base, future-loan, cap, dues/outstanding and
+  overpayment cases.
+- Widget tests for AuthGate fail-closed states, viewer gating, ledger and empty/
+  error states.
+- Cache/outbox tests must cover per-user scoping.
+- SQL integration should cover tenant isolation, viewer denial, payment split,
+  idempotency, void/close/reopen and audit.
+- Do not claim Supabase verification from a PGlite run. Record the environment.
+
+## 7. Workflow Checklist
+
+- [ ] `flutter analyze` clean.
+- [ ] `flutter test` under UTC passes.
+- [ ] Calendar tests under `Asia/Kathmandu` pass.
+- [ ] `flutter build web` succeeds.
+- [ ] SQL migrations parse and apply to a disposable Postgres.
+- [ ] `security_checks.sql` PASS; `smoke_test.sql` PASS on staging.
+- [ ] Docs updated when behavior, schema, auth or deployment changes.
+- [ ] No secrets, logs, build output or dumps committed.
+- [ ] Expand/contract order respected; old client not left against a contracted
+      schema.

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/budget/budget_calculator.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/skeleton.dart';
+import '../auth/profiles_provider.dart';
 import 'budget_form.dart';
 import 'budgets_provider.dart';
 
@@ -12,17 +13,20 @@ class BudgetsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final budgetsAsync = ref.watch(budgetsProvider);
+    final canWrite = ref.watch(canWriteProvider);
     final fmt = NumberFormat('#,##0.00');
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Budgets')),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'addBudget',
-        tooltip: 'Set budget',
-        onPressed: () => showDialog(
-            context: context, builder: (_) => const BudgetFormDialog()),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: canWrite
+          ? FloatingActionButton(
+              heroTag: 'addBudget',
+              tooltip: 'Set budget',
+              onPressed: () => showDialog(
+                  context: context, builder: (_) => const BudgetFormDialog()),
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: budgetsAsync.when(
         loading: () => const SkeletonList(itemCount: 4),
         error: (e, _) => ErrorState(
@@ -34,12 +38,15 @@ class BudgetsPage extends ConsumerWidget {
             return EmptyState(
               icon: Icons.savings,
               title: 'No budgets yet',
-              subtitle:
-                  'Apply migration 20261015140000_budget_tracker_v1, then set monthly limits.\nNepal FY ${BudgetCalculator.fyLabel(DateTime.now())}, no rollover in v1.',
-              ctaLabel: 'Set budget',
-              onCta: () => showDialog(
-                  context: context,
-                  builder: (_) => const BudgetFormDialog()),
+              subtitle: canWrite
+                  ? 'Set monthly limits.\nNepal FY ${BudgetCalculator.fyLabel(DateTime.now())}, no rollover in v1.'
+                  : 'No budgets to show.',
+              ctaLabel: canWrite ? 'Set budget' : null,
+              onCta: canWrite
+                  ? () => showDialog(
+                      context: context,
+                      builder: (_) => const BudgetFormDialog())
+                  : null,
             );
           }
           return ListView.builder(

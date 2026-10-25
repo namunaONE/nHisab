@@ -9,7 +9,9 @@ import '../../core/dates/bs_date.dart';
 import '../../core/dates/bs_picker.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/skeleton.dart';
+import '../auth/profiles_provider.dart';
 import '../home/home_shell.dart';
+import '../loans/close_loan_dialog.dart';
 import '../loans/emi_schedule_page.dart';
 import '../loans/loan_form.dart';
 import '../loans/loan_model.dart';
@@ -18,6 +20,15 @@ import '../notifications/notifications_button.dart';
 
 class LedgerPage extends ConsumerWidget {
   const LedgerPage({super.key});
+
+  Future<void> _closeLoan(
+      BuildContext context, WidgetRef ref, LoanRow loan) async {
+    final closed = await showDialog<bool>(
+      context: context,
+      builder: (_) => CloseLoanDialog(loan: loan),
+    );
+    if (closed == true) ref.invalidate(loansProvider);
+  }
 
   /// Extract per-loan row data once, reused by both desktop table and mobile cards.
   static List<_LoanRowData> _rows(List<LoanRow> loans, DateTime today,
@@ -29,9 +40,22 @@ class LedgerPage extends ConsumerWidget {
       final annual = LoanCalculator.annualRate(rate: l.rate, rateType: l.rateType);
       final days = LoanCalculator.dueDays(start: l.startDate, today: today);
       final per = LoanCalculator.perDay(principal: l.principal, annualRateDecimal: annual, dayBase: l.dayBase);
-      final interest = LoanCalculator.interest(perDayAmount: per, dueDaysCount: days);
-      final dues = (interest - l.paid).clamp(0, double.infinity).toDouble();
-      final total = LoanCalculator.total(principal: l.principal, interestAmount: interest, paid: l.paid);
+      final interest = LoanCalculator.cappedInterest(
+        principal: l.principal,
+        interestAmount:
+            LoanCalculator.interest(perDayAmount: per, dueDaysCount: days),
+      );
+      // Dues is unpaid *interest*. Using total paid here let a principal-only
+      // payment hide accrued interest while Total still showed it.
+      final dues = LoanCalculator.dues(
+        interest: interest,
+        interestPaid: l.interestPaid,
+      );
+      final total = LoanCalculator.outstanding(
+        principal: l.principal,
+        interest: interest,
+        totalPaid: l.paid,
+      );
       out.add(_LoanRowData(
         sn: sn,
         loan: l,
@@ -107,16 +131,20 @@ class LedgerPage extends ConsumerWidget {
                   ),
                   data: (loans) {
                     final rows = _rows(loans, today, fmt, scheme, ref);
+                    final canWrite = ref.watch(canWriteProvider);
                     if (loans.isEmpty) {
                       return EmptyState(
                         icon: Icons.table_chart,
                         title: 'No loans yet',
-                        subtitle:
-                            'Add a party and loan to start tracking interest and dues.',
-                        ctaLabel: 'Add loan',
-                        onCta: () => showDialog(
-                            context: context,
-                            builder: (_) => const LoanFormDialog()),
+                        subtitle: canWrite
+                            ? 'Add a party and loan to start tracking interest and dues.'
+                            : 'No loans to show.',
+                        ctaLabel: canWrite ? 'Add loan' : null,
+                        onCta: canWrite
+                            ? () => showDialog(
+                                context: context,
+                                builder: (_) => const LoanFormDialog())
+                            : null,
                       );
                     }
                     if (isMobile) {
@@ -138,6 +166,7 @@ class LedgerPage extends ConsumerWidget {
   // =========================================================================
   Widget _desktopBody(BuildContext context, List<LoanRow> loans, List<_LoanRowData> rows, DateTime today,
       NumberFormat fmt, ColorScheme scheme, WidgetRef ref) {
+    final canWrite = ref.watch(canWriteProvider);
     double tP = 0, tPer = 0, tI = 0, tPaid = 0, tDues = 0, tT = 0;
     for (final l in loans) {
       tP += l.principal;
@@ -175,19 +204,27 @@ class LedgerPage extends ConsumerWidget {
                     builder: (_) => EmiSchedulePage(loanId: r.loan.id)),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.archive_outlined, size: 18),
-              tooltip: 'Archive loan',
-              onPressed: () async {
-                await Supabase.instance.client
-                    .from('loans')
-                    .update({'deleted_at': DateTime.now().toIso8601String()})
-                    .eq('id', r.loan.id);
-                await AuditLog.write(
-                    table: 'loans', rowId: r.loan.id, action: 'archive');
-                ref.invalidate(loansProvider);
-              },
-            ),
+            if (canWrite) ...[
+              IconButton(
+                icon: const Icon(Icons.lock_outline, size: 18),
+                tooltip: 'Close loan',
+                onPressed: () => _closeLoan(context, ref, r.loan),
+              ),
+              IconButton(
+                icon: const Icon(Icons.archive_outlined, size: 18),
+                tooltip: 'Archive loan',
+                onPressed: () async {
+                  await Supabase.instance.client
+                      .from('loans')
+                      .update(
+                          {'deleted_at': DateTime.now().toIso8601String()})
+                      .eq('id', r.loan.id);
+                  await AuditLog.write(
+                      table: 'loans', rowId: r.loan.id, action: 'archive');
+                  ref.invalidate(loansProvider);
+                },
+              ),
+            ],
           ],
         )),
       ]));
@@ -237,6 +274,7 @@ class LedgerPage extends ConsumerWidget {
   // =========================================================================
   Widget _mobileBody(BuildContext context, List<_LoanRowData> rows, NumberFormat fmt,
       ColorScheme scheme, WidgetRef ref) {
+    final canWrite = ref.watch(canWriteProvider);
     if (rows.isEmpty) {
       return const Center(
         child: Padding(
@@ -271,19 +309,28 @@ class LedgerPage extends ConsumerWidget {
                             builder: (_) => EmiSchedulePage(loanId: l.id)),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.archive_outlined, size: 18),
-                      tooltip: 'Archive loan',
-                      onPressed: () async {
-                        await Supabase.instance.client
-                            .from('loans')
-                            .update({'deleted_at': DateTime.now().toIso8601String()})
-                            .eq('id', l.id);
-                        await AuditLog.write(
-                            table: 'loans', rowId: l.id, action: 'archive');
-                        ref.invalidate(loansProvider);
-                      },
-                    ),
+                    if (canWrite) ...[
+                      IconButton(
+                        icon: const Icon(Icons.lock_outline, size: 18),
+                        tooltip: 'Close loan',
+                        onPressed: () => _closeLoan(context, ref, l),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.archive_outlined, size: 18),
+                        tooltip: 'Archive loan',
+                        onPressed: () async {
+                          await Supabase.instance.client
+                              .from('loans')
+                              .update({
+                                'deleted_at': DateTime.now().toIso8601String()
+                              })
+                              .eq('id', l.id);
+                          await AuditLog.write(
+                              table: 'loans', rowId: l.id, action: 'archive');
+                          ref.invalidate(loansProvider);
+                        },
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 8),

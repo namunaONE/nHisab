@@ -1,0 +1,2 @@
+# Root-level operator logs (local runs, not to be committed)
+*.log

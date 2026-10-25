@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 class StatementRow {
   final String id;
   final DateTime date;
-  final String type; // 'loan_disbursal', 'payment', 'interest_accrual'
+  final String type; // 'loan_disbursal', 'payment', 'interest_accrual', 'write_off'
   final String description;
   final double debit;   // increases what party owes (receivable) / we owe (payable)
   final double credit;  // decreases what party owes / we owe
@@ -32,7 +32,12 @@ class PartyStatement {
   final double totalPrincipalPaid;
   final double totalInterestAccrued;
   final double totalInterestPaid;
-  final double outstanding; // principal - principalPaid + interestAccrued - interestPaid
+
+  /// Amount forgiven when a loan was closed with an explicit write-off.
+  final double totalWrittenOff;
+
+  /// principal - principalPaid + interestAccrued - interestPaid - writtenOff
+  final double outstanding;
   final List<StatementRow> rows;
   final DateTime asOfDate;
 
@@ -46,6 +51,7 @@ class PartyStatement {
     required this.totalPrincipalPaid,
     required this.totalInterestAccrued,
     required this.totalInterestPaid,
+    this.totalWrittenOff = 0,
     required this.outstanding,
     required this.rows,
     required this.asOfDate,

@@ -15,6 +15,31 @@ class BsPicker {
 
   static bool get preferBs => _preferBs;
 
+  /// Convert an AD civil date to a BS civil date without depending on the
+  /// machine's timezone.
+  ///
+  /// `bikram_sambat` converts through UTC. Feeding it local midnight makes the
+  /// result depend on the host timezone (a UTC CI runner saw 2083-06-28 for
+  /// 2026-10-15 while a Nepal machine saw 2083-06-29). Noon UTC is inside the
+  /// same Nepal civil day in every timezone, so the conversion is stable.
+  static BikramSambat bsFromAd(DateTime ad) {
+    return BikramSambat.fromDateTime(
+      DateTime.utc(ad.year, ad.month, ad.day, 12),
+    );
+  }
+
+  /// Convert a BS civil date to an AD civil date without depending on the
+  /// machine's timezone.
+  ///
+  /// `BikramSambat.toDateTime()` returns a local instant. In UTC that instant
+  /// is 18:15 on the previous day, which previously shifted every picked date
+  /// one day back in CI. Add the Nepal offset back before taking the civil
+  /// date so the result is identical on every host.
+  static DateTime adFromBs(BikramSambat bs) {
+    final utc = bs.toUtc().add(const Duration(hours: 5, minutes: 45));
+    return DateTime(utc.year, utc.month, utc.day);
+  }
+
   /// Show the dual picker. [firstDate]/[lastDate] bound both calendars.
   static Future<DateTime?> pick(
     BuildContext context, {
@@ -38,20 +63,19 @@ class BsPicker {
     final picked = await showDialog<BikramSambat>(
       context: context,
       builder: (_) => _BsMonthPicker(
-        initial: BikramSambat.fromDateTime(initialDate),
-        first: BikramSambat.fromDateTime(first),
-        last: BikramSambat.fromDateTime(last),
+        initial: bsFromAd(initialDate),
+        first: bsFromAd(first),
+        last: bsFromAd(last),
       ),
     );
-    final ad = picked?.toDateTime();
-    if (ad == null) return null;
-    return DateTime(ad.year, ad.month, ad.day);
+    if (picked == null) return null;
+    return adFromBs(picked);
   }
 
   /// Preview label for the choice sheet (AD `y/m/d`, BS `y-m-d`).
   static String preview(DateTime ad, bool bs) {
     if (!bs) return '${ad.year}/${ad.month}/${ad.day}';
-    final n = BikramSambat.fromDateTime(ad);
+    final n = bsFromAd(ad);
     final m = n.month.toString().padLeft(2, '0');
     final d = n.day.toString().padLeft(2, '0');
     return '${n.year}-$m-$d BS';

@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Invite-only sign-in.
+///
+/// Public sign-up was removed deliberately: a new auth user used to receive
+/// an owner profile in the shared tenant, exposing every party, loan, and
+/// payment. New users must be invited by an owner (see migration
+/// 20261025120000_tenant_membership_rls.sql).
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
   @override
@@ -10,27 +16,17 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _email = TextEditingController();
   final _password = TextEditingController();
-  final _displayName = TextEditingController();
-  final _phone = TextEditingController();
-  bool _isSignup = false;
   bool _busy = false;
   bool _obscurePassword = true;
   String? _error;
-  bool _terms = false;
 
   // Per-field inline validation state
   String? _emailError;
   String? _passwordError;
-  String? _displayNameError;
-  String? _termsError;
 
   bool _emailValid(String v) {
-    final re = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final re = RegExp(r'^[\w\-\.]+@([\w\-]+\.)+[\w\-]{2,4}$');
     return re.hasMatch(v.trim());
-  }
-
-  bool _passwordStrong(String v) {
-    return v.length >= 8 && RegExp(r'[0-9]').hasMatch(v) && RegExp(r'[A-Z]').hasMatch(v);
   }
 
   void _validateEmail() {
@@ -45,79 +41,53 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _validatePassword() {
-    final v = _password.text;
-    if (v.isEmpty) {
-      setState(() => _passwordError = null);
-    } else if (!_passwordStrong(v)) {
-      setState(() => _passwordError = '8+ chars, one number, one uppercase');
+    if (_password.text.isEmpty) {
+      setState(() => _passwordError = 'Password is required');
     } else {
       setState(() => _passwordError = null);
     }
-  }
-
-  void _validateDisplayName() {
-    final v = _displayName.text.trim();
-    if (!_isSignup) {
-      setState(() => _displayNameError = null);
-      return;
-    }
-    if (v.isEmpty) {
-      setState(() => _displayNameError = 'Full name is required');
-    } else if (v.length < 2) {
-      setState(() => _displayNameError = 'Name too short (min 2 chars)');
-    } else {
-      setState(() => _displayNameError = null);
-    }
-  }
-
-  void _validateTerms() {
-    if (!_isSignup) {
-      setState(() => _termsError = null);
-      return;
-    }
-    setState(() => _termsError = _terms ? null : 'You must accept the terms');
   }
 
   Future<void> _submit() async {
-    // Run all inline validation first
     _validateEmail();
     _validatePassword();
-    _validateDisplayName();
-    _validateTerms();
-    if (_emailError != null ||
-        _passwordError != null ||
-        _displayNameError != null ||
-        _termsError != null) {
-      return;
-    }
+    if (_emailError != null || _passwordError != null) return;
 
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      final auth = Supabase.instance.client.auth;
-      if (_isSignup) {
-        final res = await auth.signUp(
-          email: _email.text.trim(),
-          password: _password.text,
-          data: {
-            'display_name': _displayName.text.trim(),
-            'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
-          },
-        );
-        if (res.user == null) {
-          setState(() => _error = 'Signup failed. Check your email and try again.');
-          return;
-        }
-        setState(() => _error = null);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Account created. Check your email to verify.'),
-        ));
-      } else {
-        await auth.signInWithPassword(
-          email: _email.text.trim(),
-          password: _password.text,
-        );
-      }
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: _email.text.trim(),
+        password: _password.text,
+      );
+    } on AuthException catch (e) {
+      setState(() => _error = e.message);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _resetPassword() async {
+    _validateEmail();
+    if (_emailError != null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        _email.text.trim(),
+        redirectTo: Uri.base.toString(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+            'If that email is registered, a password reset link has been sent.'),
+      ));
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
@@ -131,8 +101,6 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _email.dispose();
     _password.dispose();
-    _displayName.dispose();
-    _phone.dispose();
     super.dispose();
   }
 
@@ -152,42 +120,38 @@ class _LoginPageState extends State<LoginPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    _isSignup ? 'Create account' : 'Sign in',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(color: scheme.primary, fontWeight: FontWeight.bold),
+                    'Sign in',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        color: scheme.primary, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _isSignup
-                        ? 'Join nHisab to manage your loan records for Nepal.'
-                        : 'Loan records for Nepal. Sign in to continue.',
+                    'Loan records for Nepal. Sign in to continue.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
-                  if (_isSignup) ...[
-                    TextField(
-                      controller: _displayName,
-                      keyboardType: TextInputType.name,
-                      textInputAction: TextInputAction.next,
-                      decoration: InputDecoration(
-                        labelText: 'Full Name *',
-                        hintText: 'e.g. Madhav Koirala',
-                        errorText: _displayNameError,
-                      ),
-                      onChanged: (_) => _validateDisplayName(),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 8),
-                  ],
+                    child: Text(
+                      'nHisab is invite-only. Ask your organisation owner for an invitation.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   TextField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.username],
                     decoration: InputDecoration(
                       labelText: 'Email *',
                       hintText: 'name@example.com',
@@ -196,28 +160,15 @@ class _LoginPageState extends State<LoginPage> {
                     onChanged: (_) => _validateEmail(),
                   ),
                   const SizedBox(height: 8),
-                  if (_isSignup) ...[
-                    TextField(
-                      controller: _phone,
-                      keyboardType: TextInputType.phone,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone (optional)',
-                        hintText: '+977 98XXXXXXXX',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
                   TextField(
                     controller: _password,
                     obscureText: _obscurePassword,
                     textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
                     onSubmitted: (_) => _submit(),
                     decoration: InputDecoration(
                       labelText: 'Password *',
-                      hintText: _isSignup
-                          ? '8+ chars, one number, one uppercase'
-                          : 'Your password',
+                      hintText: 'Your password',
                       errorText: _passwordError,
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -226,62 +177,15 @@ class _LoginPageState extends State<LoginPage> {
                               : Icons.visibility,
                           size: 20,
                         ),
-                        tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        tooltip: _obscurePassword
+                            ? 'Show password'
+                            : 'Hide password',
+                        onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword),
                       ),
                     ),
                     onChanged: (_) => _validatePassword(),
                   ),
-                  const SizedBox(height: 8),
-                  if (_isSignup) ...[
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _terms,
-                          onChanged: (v) => setState(() => _terms = v ?? false),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: RichText(
-                            text: TextSpan(
-                              style: Theme.of(context).textTheme.bodySmall,
-                              children: [
-                                const TextSpan(text: 'I accept the '),
-                                TextSpan(
-                                  text: 'Terms of Service',
-                                  style: TextStyle(
-                                    color: scheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const TextSpan(text: ' and '),
-                                TextSpan(
-                                  text: 'Privacy Policy',
-                                  style: TextStyle(
-                                    color: scheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const TextSpan(text: '.'),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_termsError != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        _termsError!,
-                        style: TextStyle(
-                          color: scheme.error,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 8),
                     Text(_error!, style: TextStyle(color: scheme.error)),
@@ -293,45 +197,12 @@ class _LoginPageState extends State<LoginPage> {
                       backgroundColor: scheme.secondary,
                       foregroundColor: scheme.onSecondary,
                     ),
-                    child: Text(_busy
-                        ? 'Please wait...'
-                        : (_isSignup ? 'Create account' : 'Sign in')),
+                    child: Text(_busy ? 'Please wait...' : 'Sign in'),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _isSignup ? 'Already have an account? ' : 'New here? ',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      TextButton(
-                        onPressed: () => setState(() => _isSignup = !_isSignup),
-                        child: Text(
-                          _isSignup ? 'Sign in' : 'Create account',
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (!_isSignup) ...[
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () {
-                        // Forgot password handled by Supabase reset flow
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text('Password reset sent to your email.'),
-                        ));
-                      },
-                      child: const Text('Forgot password?'),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Text(
-                    'We will send a verification email before first sign in.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                    textAlign: TextAlign.center,
+                  const SizedBox(height: 4),
+                  TextButton(
+                    onPressed: _busy ? null : _resetPassword,
+                    child: const Text('Forgot password?'),
                   ),
                 ],
               ),

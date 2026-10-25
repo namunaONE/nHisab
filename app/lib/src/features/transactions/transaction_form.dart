@@ -90,6 +90,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
       payloads.add({
         'account_id': accountId,
         'kind': 'transfer',
+        'transfer_direction': 'out',
         'amount': amt,
         'txn_date': day,
         'notes': notes.text.trim().isEmpty
@@ -99,6 +100,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
       payloads.add({
         'account_id': toAccountId,
         'kind': 'transfer',
+        'transfer_direction': 'in',
         'amount': amt,
         'txn_date': day,
         'notes': notes.text.trim().isEmpty
