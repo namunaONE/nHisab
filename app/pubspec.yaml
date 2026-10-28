@@ -49,7 +49,7 @@ dependencies:
   printing: ^5.14.2
   hive_flutter: ^1.1.0
   connectivity_plus: ^6.1.4
-  web: ^1.1.1
+  web: ^1.1.2
   file_picker: ^8.1.7
 
 dev_dependencies:
