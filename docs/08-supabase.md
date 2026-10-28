@@ -48,8 +48,16 @@ Applied as of 2026-10-28:
    writes and anon access. Applied 2026-10-28; `security_checks.sql` returns
    `PASS all_checks`.
 
+10. `20261028230000_first_owner_bootstrap` - in-app first-owner setup:
+    `system_needs_bootstrap()` (truthful while `tenant_members` is empty) and
+    `bootstrap_first_owner(email, password, tenant_name)` (creates the auth
+    user + first tenant + owner membership + profile, fails closed once any
+    membership exists). The login page shows a First-time setup panel with the
+    owner email prefilled (`work.htpl@gmail.com`) while this is true.
+
 Remaining manual steps: disable public sign-up / enable email confirmation in
-Auth, bootstrap the first owner, deploy alerts Edge + cron, schedule backups.
+Auth (after the first owner exists), deploy alerts Edge + cron, schedule
+backups. First-owner bootstrap no longer needs SQL or the dashboard.
 
 ## Current Data Model
 

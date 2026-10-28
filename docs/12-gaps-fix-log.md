@@ -4,6 +4,17 @@ Opened 2026-10-15 from a docs/code/database audit (21 parties, 21 loans, 0
 payments, 0 EMI rows, 0 notifications, 0 audit rows). This log records what was
 actually fixed. Newest work is first.
 
+## 2026-10-28 - First-owner self-service setup panel
+
+- [x] DB `20261028230000_first_owner_bootstrap`: guarded `bootstrap_first_owner`
+      RPC (works only while zero tenant memberships exist; advisory-locked) +
+      `system_needs_bootstrap()` probe.
+- [x] Login page: First-time setup panel (email prefilled `work.htpl@gmail.com`,
+      new password + confirm, "Create first owner & sign in") with a Skip
+      button that collapses to the normal invite-only sign-in. The panel
+      disappears automatically once an owner exists.
+- [x] CI re-run: analyze clean, 49/49 tests (TZ=UTC), release web build OK.
+
 ## 2026-10-28 - CI gate executed locally + repo/DB parity
 
 ### Local CI (now green, unblocks push/merge)

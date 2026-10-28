@@ -7,6 +7,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// an owner profile in the shared tenant, exposing every party, loan, and
 /// payment. New users must be invited by an owner (see migration
 /// 20261025120000_tenant_membership_rls.sql).
+///
+/// First run only: while no organisation exists, a setup panel is offered to
+/// create the first owner (email prefilled below — skip the SQL/dashboard
+/// bootstrap step). The backing RPC refuses once any membership exists.
+const String firstOwnerEmail = 'work.htpl@gmail.com';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
   @override
@@ -14,11 +20,17 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _email = TextEditingController();
+  final _email = TextEditingController(text: firstOwnerEmail);
   final _password = TextEditingController();
+  final _confirm = TextEditingController();
   bool _busy = false;
   bool _obscurePassword = true;
   String? _error;
+
+  // First-owner setup panel state.
+  bool? _showSetup; // null = checking, true = show, false = user skipped.
+  bool _setupBusy = false;
+  String? _setupError;
 
   // Per-field inline validation state
   String? _emailError;
@@ -45,6 +57,62 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _passwordError = 'Password is required');
     } else {
       setState(() => _passwordError = null);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBootstrap();
+  }
+
+  Future<void> _checkBootstrap() async {
+    try {
+      final needs = await Supabase.instance.client
+          .rpc('system_needs_bootstrap') as bool?;
+      if (mounted) setState(() => _showSetup = needs == true);
+    } catch (_) {
+      // Fail closed: if the probe fails, hide the panel (normal login works).
+      if (mounted) setState(() => _showSetup = false);
+    }
+  }
+
+  Future<void> _createFirstOwner() async {
+    final email = _email.text.trim();
+    if (!_emailValid(email)) {
+      setState(() => _setupError = 'Enter a valid email like name@example.com');
+      return;
+    }
+    if (_password.text.length < 8) {
+      setState(() => _setupError = 'Password must be at least 8 characters');
+      return;
+    }
+    if (_password.text != _confirm.text) {
+      setState(() => _setupError = 'Passwords do not match');
+      return;
+    }
+    setState(() {
+      _setupBusy = true;
+      _setupError = null;
+      _error = null;
+    });
+    try {
+      await Supabase.instance.client.rpc('bootstrap_first_owner', params: {
+        'p_email': email,
+        'p_password': _password.text,
+        'p_tenant_name': 'My Organisation',
+      });
+      // Owner created: sign straight in; the auth stream takes over.
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: email, password: _password.text);
+    } on PostgrestException catch (e) {
+      setState(() => _setupError = e.message);
+    } on AuthException catch (e) {
+      setState(() => _setupError = e.message);
+    } catch (e) {
+      setState(() => _setupError = e.toString());
+    } finally {
+      if (mounted) setState(() => _setupBusy = false);
     }
   }
 
@@ -101,6 +169,7 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _confirm.dispose();
     super.dispose();
   }
 
@@ -159,51 +228,131 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     onChanged: (_) => _validateEmail(),
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _password,
-                    obscureText: _obscurePassword,
-                    textInputAction: TextInputAction.done,
-                    autofillHints: const [AutofillHints.password],
-                    onSubmitted: (_) => _submit(),
-                    decoration: InputDecoration(
-                      labelText: 'Password *',
-                      hintText: 'Your password',
-                      errorText: _passwordError,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          size: 20,
-                        ),
-                        tooltip: _obscurePassword
-                            ? 'Show password'
-                            : 'Hide password',
-                        onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword),
+                  if (_showSetup == null) ...[
+                    const SizedBox(height: 12),
+                    const Center(child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )),
+                  ] else if (_showSetup == true)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text('First-time setup',
+                              style: TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center),
+                          const SizedBox(height: 4),
+                          Text(
+                            'No organisation exists yet. Creating the first '
+                            'owner here (email above) skips the manual '
+                            'SQL/dashboard bootstrap step. This option '
+                            'disappears once the owner exists.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _password,
+                            obscureText: _obscurePassword,
+                            autofillHints: const [AutofillHints.newPassword],
+                            decoration: InputDecoration(
+                              labelText: 'New password * (min 8 chars)',
+                              hintText: 'Choose a strong password',
+                              errorText: _passwordError,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _confirm,
+                            obscureText: _obscurePassword,
+                            autofillHints: const [AutofillHints.newPassword],
+                            decoration: const InputDecoration(
+                              labelText: 'Confirm password *',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          if (_setupError != null)
+                            Text(_setupError!,
+                                style: TextStyle(color: scheme.error)),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed:
+                                _setupBusy ? null : _createFirstOwner,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: scheme.secondary,
+                              foregroundColor: scheme.onSecondary,
+                            ),
+                            child: Text(_setupBusy
+                                ? 'Creating...'
+                                : 'Create first owner & sign in'),
+                          ),
+                          const SizedBox(height: 4),
+                          TextButton(
+                            onPressed: _setupBusy
+                                ? null
+                                : () => setState(() {
+                                      _showSetup = false;
+                                      _setupError = null;
+                                    }),
+                            child: const Text('Skip'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    TextField(
+                      controller: _password,
+                      obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.password],
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        labelText: 'Password *',
+                        hintText: 'Your password',
+                        errorText: _passwordError,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            size: 20,
+                          ),
+                          tooltip: _obscurePassword
+                              ? 'Show password'
+                              : 'Hide password',
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                      onChanged: (_) => _validatePassword(),
                     ),
-                    onChanged: (_) => _validatePassword(),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(_error!, style: TextStyle(color: scheme.error)),
+                    if (_error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(_error!, style: TextStyle(color: scheme.error)),
+                    ],
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _busy ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: scheme.secondary,
+                        foregroundColor: scheme.onSecondary,
+                      ),
+                      child: Text(_busy ? 'Please wait...' : 'Sign in'),
+                    ),
+                    const SizedBox(height: 4),
+                    TextButton(
+                      onPressed: _busy ? null : _resetPassword,
+                      child: const Text('Forgot password?'),
+                    ),
                   ],
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _busy ? null : _submit,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: scheme.secondary,
-                      foregroundColor: scheme.onSecondary,
-                    ),
-                    child: Text(_busy ? 'Please wait...' : 'Sign in'),
-                  ),
-                  const SizedBox(height: 4),
-                  TextButton(
-                    onPressed: _busy ? null : _resetPassword,
-                    child: const Text('Forgot password?'),
-                  ),
                 ],
               ),
             ),
