@@ -48,7 +48,7 @@ dependencies:
   pdf: ^3.11.1
   printing: ^5.14.2
   hive_flutter: ^1.1.0
-  connectivity_plus: ^6.1.4
+  connectivity_plus: ^7.3.2
   web: ^1.1.1
   file_picker: ^8.1.7
 
