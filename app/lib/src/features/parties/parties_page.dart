@@ -7,8 +7,21 @@ import 'parties_provider.dart';
 import 'party_form.dart';
 import 'party_statement_page.dart';
 
-class PartiesPage extends ConsumerWidget {
+class PartiesPage extends ConsumerStatefulWidget {
   const PartiesPage({super.key});
+  @override
+  ConsumerState<PartiesPage> createState() => _PartiesPageState();
+}
+
+class _PartiesPageState extends ConsumerState<PartiesPage> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   Future<void> _archive(
       BuildContext context, WidgetRef ref, String id, String name) async {
@@ -30,17 +43,34 @@ class PartiesPage extends ConsumerWidget {
     if (ok != true) return;
     await Supabase.instance.client.from('parties').update(
         {'deleted_at': DateTime.now().toIso8601String()}).eq('id', id);
-    await AuditLog.write(
-        table: 'parties', rowId: id, action: 'archive');
+    await AuditLog.write(table: 'parties', rowId: id, action: 'archive');
     ref.invalidate(partiesProvider);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final parties = ref.watch(partiesProvider);
     final canWrite = ref.watch(canWriteProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Parties')),
+      appBar: AppBar(
+        title: const Text('Parties'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                hintText: 'Search by name, phone, address...',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+            ),
+          ),
+        ),
+      ),
       floatingActionButton: canWrite
           ? FloatingActionButton(
               onPressed: () => showDialog(
@@ -51,49 +81,64 @@ class PartiesPage extends ConsumerWidget {
       body: parties.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
-        data: (list) => ListView.builder(
-          itemCount: list.length,
-          itemBuilder: (_, i) => ListTile(
-            leading: CircleAvatar(
-                child: Text(
-                    list[i].name.isNotEmpty ? list[i].name[0] : '?')),
-            title: Text(list[i].name),
-            subtitle: Text([
-              list[i].phone,
-              list[i].address
-            ].where((e) => e != null && e.isNotEmpty).join(' | ')),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.receipt_long, size: 18),
-                  tooltip: 'View statement',
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            PartyStatementPage(partyId: list[i].id)),
-                  ),
-                ),
-                if (canWrite) ...[
+        data: (list) {
+          final filtered = _query.isEmpty
+              ? list
+              : list.where((p) {
+                  final q = _query;
+                  return p.name.toLowerCase().contains(q) ||
+                      (p.phone ?? '').toLowerCase().contains(q) ||
+                      (p.address ?? '').toLowerCase().contains(q) ||
+                      (p.idNumber ?? '').toLowerCase().contains(q);
+                }).toList();
+          if (filtered.isEmpty) {
+            return const Center(child: Text('No matching parties.'));
+          }
+          return ListView.builder(
+            itemCount: filtered.length,
+            itemBuilder: (_, i) => ListTile(
+              leading: CircleAvatar(
+                  child: Text(filtered[i].name.isNotEmpty
+                      ? filtered[i].name[0]
+                      : '?')),
+              title: Text(filtered[i].name),
+              subtitle: Text([
+                filtered[i].phone,
+                filtered[i].address
+              ].where((e) => e != null && e.isNotEmpty).join(' | ')),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   IconButton(
-                    icon: const Icon(Icons.edit, size: 18),
-                    tooltip: 'Edit party',
-                    onPressed: () => showDialog(
-                        context: context,
-                        builder: (_) => const PartyFormDialog()),
+                    icon: const Icon(Icons.receipt_long, size: 18),
+                    tooltip: 'View statement',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              PartyStatementPage(partyId: filtered[i].id)),
+                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.archive_outlined, size: 18),
-                    tooltip: 'Archive (soft delete)',
-                    onPressed: () => _archive(
-                        context, ref, list[i].id, list[i].name),
-                  ),
+                  if (canWrite) ...[
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 18),
+                      tooltip: 'Edit party',
+                      onPressed: () => showDialog(
+                          context: context,
+                          builder: (_) => PartyFormDialog(party: filtered[i])),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.archive_outlined, size: 18),
+                      tooltip: 'Archive (soft delete)',
+                      onPressed: () => _archive(
+                          context, ref, filtered[i].id, filtered[i].name),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

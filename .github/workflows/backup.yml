@@ -1,0 +1,30 @@
+name: Scheduled database backup
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # 02:00 UTC Sundays
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Take pg_dump
+        env:
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_HOST: db.aldbvbpbittvhkecnfpx.supabase.co
+        run: |
+          pg_dump -h "$DB_HOST" -p 5432 -U postgres -d postgres \
+            --format=custom --no-owner --no-privileges \
+            -f "nhisab_$(date -u +%Y%m%d_%H%M%S).dump"
+
+      - name: Upload dump as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nhisab-db-backup
+          path: "*.dump"
+          retention-days: 30

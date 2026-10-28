@@ -56,9 +56,11 @@ class EmiSchedule {
     required this.installments,
   });
 
-  /// Whether this loan uses reducing-balance amortization (has a schedule).
+  /// Whether this loan uses amortization (has a schedule).
   bool get hasSchedule =>
-      calculationMethod == 'reducing_balance' || calculationMethod == 'emi';
+      calculationMethod == 'reducing_balance' ||
+      calculationMethod == 'emi' ||
+      calculationMethod == 'flat';
 
   /// Number of pending installments.
   int get pendingCount =>

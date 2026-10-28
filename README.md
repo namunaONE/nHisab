@@ -22,12 +22,11 @@ not authorise or post money writes.
 - `flutter analyze`: clean.
 - Tests: 49/49 under UTC; 7/7 calendar tests under `Asia/Kathmandu`.
 - `flutter build web`: succeeds.
-- Tenancy, RLS and payment-RPC migrations are written and locally verified on
-  PostgreSQL 18.6 (PGlite): 20/20 integration groups, 11/11 expand/contract
-  groups, security checks and smoke test PASS.
-- **The hardening migrations are not applied to the live Supabase project.** The
-  live schema may still have the shared tenant and direct payment writes. See
-  `docs/15-runbook.md` before deploying.
+- Tenancy and payment-RPC migrations are applied to the live Supabase project
+  (ref `aldbvbpbittvhkecnfpx`) as of 2026-10-28; `security_checks.sql` returns
+  `PASS all_checks`.
+- Public sign-up must still be disabled in Supabase Auth and owners bootstrapped
+  before production use. See `docs/15-runbook.md`.
 - Public sign-up is removed from the app and must be disabled in Supabase Auth.
 - Alerts: Edge function and cron are **not deployed**. No email/SMS is sent.
 
@@ -60,7 +59,7 @@ Override the development Supabase key:
 
 ```powershell
 flutter run -d chrome `
-  --dart-define=SUPABASE_URL=https://qcbxurqxmnkzgsfpaesz.supabase.co `
+  --dart-define=SUPABASE_URL=https://aldbvbpbittvhkecnfpx.supabase.co `
   --dart-define=SUPABASE_ANON_KEY=sb_publishable_...
 ```
 

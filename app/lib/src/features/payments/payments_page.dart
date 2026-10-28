@@ -6,8 +6,21 @@ import '../auth/profiles_provider.dart';
 import 'payment_form.dart';
 import 'payments_provider.dart';
 
-class PaymentsPage extends ConsumerWidget {
+class PaymentsPage extends ConsumerStatefulWidget {
   const PaymentsPage({super.key});
+  @override
+  ConsumerState<PaymentsPage> createState() => _PaymentsPageState();
+}
+
+class _PaymentsPageState extends ConsumerState<PaymentsPage> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   Future<void> _void(BuildContext context, WidgetRef ref, String id) async {
     final ok = await showDialog<bool>(
@@ -55,11 +68,29 @@ class PaymentsPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final pays = ref.watch(paymentsProvider);
     final canWrite = ref.watch(canWriteProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Payments')),
+      appBar: AppBar(
+        title: const Text('Payments'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                hintText: 'Search by party or method...',
+                prefixIcon: Icon(Icons.search),
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+            ),
+          ),
+        ),
+      ),
       floatingActionButton: canWrite
           ? FloatingActionButton(
               onPressed: () => showDialog(
@@ -71,22 +102,34 @@ class PaymentsPage extends ConsumerWidget {
       body: pays.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
-        data: (list) => ListView.builder(
-          itemCount: list.length,
-          itemBuilder: (_, i) => ListTile(
-            title: Text(
-                '${list[i].partyName} - Rs ${list[i].total.toStringAsFixed(2)}'),
-            subtitle: Text(
-                '${list[i].date.year}/${list[i].date.month}/${list[i].date.day} | ${list[i].method ?? ''}'),
-            trailing: canWrite
-                ? IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Void payment (soft delete)',
-                    onPressed: () => _void(context, ref, list[i].id),
-                  )
-                : null,
-          ),
-        ),
+        data: (list) {
+          final filtered = _query.isEmpty
+              ? list
+              : list
+                  .where((p) =>
+                      p.partyName.toLowerCase().contains(_query) ||
+                      (p.method ?? '').toLowerCase().contains(_query))
+                  .toList();
+          if (filtered.isEmpty) {
+            return const Center(child: Text('No matching payments.'));
+          }
+          return ListView.builder(
+            itemCount: filtered.length,
+            itemBuilder: (_, i) => ListTile(
+              title: Text(
+                  '${filtered[i].partyName} - Rs ${filtered[i].total.toStringAsFixed(2)}'),
+              subtitle: Text(
+                  '${filtered[i].date.year}/${filtered[i].date.month}/${filtered[i].date.day} | ${filtered[i].method ?? ''}'),
+              trailing: canWrite
+                  ? IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: 'Void payment (soft delete)',
+                      onPressed: () => _void(context, ref, filtered[i].id),
+                    )
+                  : null,
+            ),
+          );
+        },
       ),
     );
   }

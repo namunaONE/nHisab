@@ -64,7 +64,8 @@ async function sendSms(to: string, text: string) {
 
 Deno.serve(async (req: Request) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    // Nepal civil date (UTC+05:45) for dedupe and message context.
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kathmandu" });
     const loans: Loan[] = await sb(
       "loans?select=id,tenant_id,party_id,principal_amount,start_date,due_date,status,parties(name,phone)&status=eq.active&deleted_at=is.null",
     );
@@ -114,10 +115,28 @@ Deno.serve(async (req: Request) => {
 
         try {
           if (channel === "email") {
-            // Recipient email lives on profiles/parties in later phases;
-            // for now email rows queue for the audit trail.
-            const r = await sendEmail("owner@nhisab.com", `nHisab ${alert}`, text);
-            if (!(r as Record<string, unknown>).skipped) emailed++;
+            // Resolve tenant owner emails from profiles (post-hardening, role
+            // is a projection of tenant_members). Falls back to skipping the
+            // send when no recipient exists so the in-app row still queues.
+            let recipients: string[] = [];
+            try {
+              const owners = await sb(
+                `profiles?select=email&tenant_id=eq.${loan.tenant_id}&role=eq.owner`,
+              );
+              recipients = (owners as Array<{ email?: string | null }>)
+                .map((o) => o.email ?? "")
+                .filter((e) => e.length > 0);
+            } catch (e) {
+              console.warn("owner lookup failed", e);
+            }
+            if (recipients.length === 0) {
+              // No recipient configured; leave queued for the audit trail.
+            } else {
+              for (const to of recipients) {
+                const r = await sendEmail(to, `nHisab ${alert}`, text);
+                if (!(r as Record<string, unknown>).skipped) emailed++;
+              }
+            }
           } else if (channel === "sms") {
             const r = await sendSms(loan.parties?.phone ?? "", text);
             if (!(r as Record<string, unknown>).skipped) smsed++;

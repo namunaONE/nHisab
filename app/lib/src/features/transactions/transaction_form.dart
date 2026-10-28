@@ -5,6 +5,7 @@ import '../../core/audit/audit_service.dart';
 import '../../core/cache/connectivity_provider.dart';
 import '../../core/cache/outbox.dart';
 import '../../core/dates/bs_date.dart';
+import '../../core/ids.dart';
 import '../../core/dates/bs_picker.dart';
 import '../accounts/accounts_provider.dart';
 import '../categories/categories_provider.dart';
@@ -93,6 +94,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
         'transfer_direction': 'out',
         'amount': amt,
         'txn_date': day,
+        'client_request_id': newUuidV4(),
         'notes': notes.text.trim().isEmpty
             ? 'transfer-out'
             : '${notes.text.trim()} (out)',
@@ -103,6 +105,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
         'transfer_direction': 'in',
         'amount': amt,
         'txn_date': day,
+        'client_request_id': newUuidV4(),
         'notes': notes.text.trim().isEmpty
             ? 'transfer-in'
             : '${notes.text.trim()} (in)',
@@ -114,6 +117,7 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
         'kind': kind,
         'amount': amt,
         'txn_date': day,
+        'client_request_id': newUuidV4(),
         'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
       });
     }
@@ -133,16 +137,22 @@ class _TransactionFormDialogState extends ConsumerState<TransactionFormDialog> {
     try {
       final client = Supabase.instance.client;
       for (final p in payloads) {
-        final row = await client
-            .from('transactions')
-            .insert(p)
-            .select('id')
-            .single();
-        await AuditLog.write(
-            table: 'transactions',
-            rowId: (row['id'] ?? '').toString(),
-            action: 'insert',
-            newData: p);
+        try {
+          final row = await client
+              .from('transactions')
+              .insert(p)
+              .select('id')
+              .single();
+          await AuditLog.write(
+              table: 'transactions',
+              rowId: (row['id'] ?? '').toString(),
+              action: 'insert',
+              newData: p);
+        } on PostgrestException catch (e) {
+          // Idempotent replay: row already landed (unique violation on
+          // client_request_id). Treat as success, no duplicate audit row.
+          if (e.code != '23505') rethrow;
+        }
       }
       ref.invalidate(accountsProvider);
       ref.invalidate(transactionsProvider);

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/audit/audit_service.dart';
 import '../../core/calculator/loan_calculator.dart';
+import '../../core/documents/tamasuk.dart';
 import '../../core/dates/bs_date.dart';
 import '../../core/dates/bs_picker.dart';
 import '../../core/widgets/empty_state.dart';
@@ -206,6 +207,18 @@ class LedgerPage extends ConsumerWidget {
             ),
             if (canWrite) ...[
               IconButton(
+                icon: const Icon(Icons.description_outlined, size: 18),
+                tooltip: 'Export Tamasuk (loan agreement)',
+                onPressed: () => exportTamasuk(context, r.loan.id),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit, size: 18),
+                tooltip: 'Edit loan',
+                onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => LoanFormDialog(loanId: r.loan.id)),
+              ),
+              IconButton(
                 icon: const Icon(Icons.lock_outline, size: 18),
                 tooltip: 'Close loan',
                 onPressed: () => _closeLoan(context, ref, r.loan),
@@ -310,6 +323,13 @@ class LedgerPage extends ConsumerWidget {
                       ),
                     ),
                     if (canWrite) ...[
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 18),
+                        tooltip: 'Edit loan',
+                        onPressed: () => showDialog(
+                            context: context,
+                            builder: (_) => LoanFormDialog(loanId: l.id)),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.lock_outline, size: 18),
                         tooltip: 'Close loan',

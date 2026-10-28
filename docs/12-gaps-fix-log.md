@@ -4,6 +4,42 @@ Opened 2026-10-15 from a docs/code/database audit (21 parties, 21 loans, 0
 payments, 0 EMI rows, 0 notifications, 0 audit rows). This log records what was
 actually fixed. Newest work is first.
 
+## 2026-10-28 - CI gate executed locally + repo/DB parity
+
+### Local CI (now green, unblocks push/merge)
+
+- [x] `flutter pub get` OK (Flutter 3.47.7 found at `C:\Users\user\flutter`).
+- [x] Added `generate: true` to `pubspec.yaml` — l10n codegen (`l10n.yaml`)
+      previously never ran, so `AppLocalizations` imports failed to resolve.
+- [x] `flutter analyze`: fixed 3 compile errors (wrong relative l10n import in
+      `home_shell.dart`; `mfa.unenroll(factorId:)` -> positional arg in
+      `security_page.dart`; plus 9 warnings: unused import/var, duplicate
+      import, redundant `?.` in `loan_form.dart`, block-style ifs) -> now
+      **No issues found**.
+- [x] Replaced `dart:html` CSV export with a platform-conditional downloader
+      (`core/export/file_downloader.dart`: web uses `package:web` data-URL
+      anchor; io/test uses a temp file) — fixes the deprecation lints AND keeps
+      `package:web` out of the VM test graph.
+- [x] `flutter test` under `TZ=UTC`: **49/49 passed**.
+- [x] BS picker tests under `TZ=Asia/Kathmandu`: **7/7 passed**.
+- [x] `flutter build web --release --base-href=/nhisab/ --no-wasm-dry-run`:
+      built successfully (icons tree-shaken).
+
+### Repo/DB parity (schema recovery)
+
+- [x] Recovered the session's 17 live-applied migrations (exact SQL) from
+      `supabase_migrations.schema_migrations` and wrote them to
+      `supabase/migrations/` (previously only 20261028120000 existed on disk):
+      txn idempotency, PII masking view, reconciliation view, period close,
+      tenant switcher, EMI tenure, loan-edit-tenure RPC 15-arg, approval
+      queue + RPCs, alert prefs, EMI payment allocation, Tier C foundations,
+      perf indexes/RLS initplan, Tier C compliance, PII column revocation
+      (+ `_reapply` as 20261028220001; 2 same-name applications merged into
+      ordered files). The migrations dir now mirrors the live project, so a
+      staging/restore rebuild is reproducible.
+- [x] `security_checks.sql` (curated inline version) -> `PASS all_checks`
+      re-verified after the PII column-revocation migration.
+
 ## 2026-10-25 - P0 Trust-Boundary and Money-Integrity Sprint
 
 ### CI
@@ -104,14 +140,69 @@ actually fixed. Newest work is first.
 
 ### Still open
 
-- [ ] Apply migrations to staging, run both verification scripts, then production.
+- [x] Apply migration 9 (`payment_rpcs`) to the live project (2026-10-28).
+      `security_checks.sql` now returns `PASS all_checks`.
 - [ ] Disable public sign-up / enable email confirmation in the live project.
 - [ ] Take and restore-test a manual `pg_dump`.
 - [ ] Staging/prod split and automated backups.
 - [ ] Member-admin UI, tenant switcher, invitation acceptance UI.
-- [ ] Alerts: deploy Edge + cron; currently source only.
-- [ ] MFA, CAPTCHA/rate limits, CSP/security headers.
-- [ ] Tier decision (A/B/C/D) and the compliance work that follows.
+- [x] Alerts Edge function deployed (`dispatch-alerts`, v1, ACTIVE). In-app
+      queue works; email/SMS skipped (no provider keys). Cron not yet scheduled.
+- [ ] Cron scheduling: operator must add `service_role_key` to Vault and run
+      the schedule SQL (see below). Channel decision: in-app only for Tier A.
+- [ ] MFA, CAPTCHA/rate limits. CSP/security headers: accepted risk for
+      Tier A (hosted on GitHub Pages, which cannot set headers); revisit if
+      moving to a header-capable host.
+- [x] Tier decision: Tier A (private ledger). Tier B only on pilot demand.
+- [x] Party edit workflow added (UI + audit + id_number in model).
+- [x] Loan edit RPC `update_loan_terms` added (active loans with no live
+      payments only) + UI edit action (desktop + mobile).
+- [x] Idempotency keys for ordinary transactions: `client_request_id` column +
+      unique index; client generates UUID per save; outbox + online path treat
+      unique violation (23505) as success.
+- [x] PII masking for viewers: `parties_safe` view masks phone/address/id_number
+      when `current_tenant_role()` is viewer; `parties_provider` reads from it.
+- [x] Reconciliation view `reconciliation_exceptions` (missing wallet leg,
+      amount mismatch, orphan wallet leg) with security_invoker.
+- [x] Period close: `period_closes` table + `close_period`/`is_period_closed`
+      RPCs + enforcement triggers on payments/transactions.
+- [x] Audit export CSV button on Audit Trail page.
+- [x] Tenant switcher: `active_tenant_id` on profiles + `current_tenant_id()`
+      prefers it; `set_active_tenant` RPC; UserMenu switcher + Members page.
+- [x] Member admin UI: invite (create_tenant_invite), role change, suspend/
+      reactivate, remove; Members page + More entry.
+- [x] EMI v2 (partial): persisted tenure_months + emi_amount columns;
+      flat + reducing_balance schedule generation; tenure input in loan form.
+      (Payment allocation, prepayment, penalty still pending.)
+- [x] Maker-checker: `approval_requests` table + `request_approval`/
+      `decide_approval` RPCs (self-decision blocked; approved decisions
+      execute the underlying payment/void/close action) + Approval Inbox UI.
+- [x] Alerts v2: `notification_preferences` table (per-user channels,
+      due-soon window) + preferences page + Edge function v2 consults prefs.
+- [x] MFA + session management: Security page with TOTP enroll/verify/
+      unenroll and sign-out-other-sessions (Supabase Auth).
+- [x] Nepali localization scaffold: l10n.yaml + app_en.arb + app_ne.arb
+      (core labels) + MaterialApp delegates/supportedLocales + nav labels.
+- [x] EMI v2 (more complete): persisted tenure + penalty_rate/prepayment_allowed
+      columns; record_emi_payment RPC with installment allocation, late penalty,
+      idempotency; emi_schedule provider merges paid status; Pay-next action.
+- [x] Tier C foundations: KYC fields on parties (id_type, id_verified,
+      risk_rating, consent/retention); vat_ledger + tds_ledger tables (RLS);
+      Tax/Compliance report page (report-only).
+- [x] Tier C compliance foundations: consent_records, retention_policies,
+      incident_log tables (RLS); str_candidates view (goAML-style export);
+      Tamasuk PDF export on ledger rows.
+- [x] PII column-level enforcement: revoked SELECT on phone/address/id_number/
+      id_type from authenticated on parties; new security-definer view
+      parties_with_pii masks based on role (closes viewer bypass).
+- [x] Phase 3 perf: indexes on 16 unindexed FKs; RLS initplan fix on
+      audit_logs + profiles (3 policies) -> security_checks still PASS.
+- [x] Phase 3 docs: staging/prod split procedure (17) + a11y checklist (18)
+      + mobile build guide (19) + mobile CI workflow.
+- [x] Search: client-side search on Parties and Payments pages.
+- [x] Backup automation: scheduled GitHub Actions pg_dump workflow
+      (.github/workflows/backup.yml) with 30-day artifact retention.
+- [ ] Backup owner: TBD (assign a named operator before Phase 0).
 
 ## 2026-10-15 - P0/P1/P2 Baseline
 

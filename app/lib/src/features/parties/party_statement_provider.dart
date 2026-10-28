@@ -15,7 +15,7 @@ final partyStatementProvider = FutureProvider.family<PartyStatement, String>(
 
     // Fetch party info
     final partyRes = await client
-        .from('parties')
+        .from('parties_with_pii')
         .select('id, name, phone, address')
         .eq('id', partyId)
         .filter('deleted_at', 'is', null)

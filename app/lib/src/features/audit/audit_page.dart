@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/export/file_downloader.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/skeleton.dart';
+import 'audit_model.dart';
 import 'audit_provider.dart';
 
 class AuditPage extends ConsumerStatefulWidget {
@@ -20,7 +22,20 @@ class _AuditPageState extends ConsumerState<AuditPage> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Audit Trail')),
+      appBar: AppBar(
+        title: const Text('Audit Trail'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_outlined),
+            tooltip: 'Export CSV',
+            onPressed: () {
+              final rows = rowsAsync.asData?.value;
+              if (rows == null || rows.isEmpty) return;
+              _exportCsv(rows);
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: [
           tablesAsync.when(
@@ -96,6 +111,17 @@ class _AuditPageState extends ConsumerState<AuditPage> {
         ],
       ),
     );
+  }
+
+  void _exportCsv(List<AuditRow> rows) {
+    final buf = StringBuffer();
+    buf.writeln('id,table_name,row_id,action,created_at');
+    for (final r in rows) {
+      buf.writeln('${r.id},${r.tableName},${r.rowId ?? ''},${r.action},'
+          '${r.createdAt.toIso8601String()}');
+    }
+    // Platform-conditional download (web: data-URL anchor; io: temp file).
+    downloadTextFile('audit_trail.csv', buf.toString());
   }
 
   IconData _actionIcon(String action) {

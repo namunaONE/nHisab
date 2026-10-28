@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'emi_schedule_model.dart';
 import 'emi_schedule_provider.dart';
+import '../accounts/accounts_provider.dart';
 
 class EmiSchedulePage extends ConsumerWidget {
   final String loanId;
@@ -22,6 +24,12 @@ class EmiSchedulePage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('EMI Schedule'),
         actions: [
+          if (stmt != null)
+            IconButton(
+              icon: const Icon(Icons.payments),
+              tooltip: 'Pay next installment',
+              onPressed: () => _payNext(context, ref, stmt),
+            ),
           if (stmt != null)
             IconButton(
               icon: const Icon(Icons.picture_as_pdf),
@@ -262,6 +270,82 @@ class EmiSchedulePage extends ConsumerWidget {
       case 'pending':
       default:
         return scheme.primary;
+    }
+  }
+
+  Future<void> _payNext(BuildContext context, WidgetRef ref, EmiSchedule sched) async {
+    final next = sched.installments.firstWhere(
+      (i) => i.status != 'paid',
+      orElse: () => sched.installments.last,
+    );
+    String? accountId;
+    final amountCtrl = TextEditingController(text: next.totalDue.toStringAsFixed(2));
+    final accounts = ref.read(accountsProvider).asData?.value ?? const [];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: Text('Pay installment ${next.installmentNo}'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Due: ${next.dueDate.year}/${next.dueDate.month}/${next.dueDate.day}'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Amount Rs'),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: accountId,
+                  hint: const Text('Wallet *'),
+                  items: accounts
+                      .map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${a.type})')))
+                      .toList(),
+                  onChanged: (v) => setState(() => accountId = v),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Pay'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final amt = double.tryParse(amountCtrl.text.trim());
+    if (amt == null || amt <= 0 || accountId == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid amount or wallet.')));
+      }
+      return;
+    }
+    try {
+      await Supabase.instance.client.rpc('record_emi_payment', params: {
+        'p_loan_id': sched.loanId,
+        'p_amount': amt,
+        'p_payment_date': DateTime.now().toIso8601String().substring(0, 10),
+        'p_payment_method': 'cash',
+        'p_account_id': accountId,
+        'p_client_id': null,
+        'p_installment_no': next.installmentNo,
+      });
+      ref.invalidate(emiScheduleProvider(sched.loanId));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Installment paid.')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 

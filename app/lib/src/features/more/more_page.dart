@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import '../accounts/accounts_page.dart';
+import '../approvals/approvals_page.dart';
 import '../audit/audit_page.dart';
+import '../members/members_page.dart';
 import '../categories/categories_page.dart';
 import '../import/import_page.dart';
 import '../notifications/notifications_page.dart';
+import '../notifications/notification_preferences_page.dart';
 import '../parties/parties_page.dart';
+import '../reports/tax_report_page.dart';
+import '../security/security_page.dart';
 import '../payments/payments_page.dart';
 
 class MorePage extends StatelessWidget {
@@ -15,13 +20,22 @@ class MorePage extends StatelessWidget {
       (Icons.wallet, 'Accounts', const AccountsPage()),
       (Icons.category_outlined, 'Categories', const CategoriesPage()),
       (Icons.people, 'Parties', const PartiesPage()),
+      (Icons.group, 'Members', const MembersPage()),
       (Icons.payments, 'Payments', const PaymentsPage()),
       (
         Icons.notifications_outlined,
         'Notifications',
         const NotificationsPage()
       ),
+      (
+        Icons.tune,
+        'Notification Preferences',
+        const NotificationPreferencesPage()
+      ),
       (Icons.history, 'Audit Trail', const AuditPage()),
+      (Icons.security, 'Security (MFA)', const SecurityPage()),
+      (Icons.receipt, 'Tax / Compliance Report', const TaxReportPage()),
+      (Icons.approval, 'Approvals', const ApprovalsPage()),
       (Icons.upload, 'Import / Export', const ImportPage()),
     ];
     return Scaffold(

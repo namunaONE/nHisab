@@ -90,6 +90,15 @@ class Outbox {
         await client.from(entry['table'] as String).insert(data);
         await _box.delete(k);
         flushed++;
+      } on PostgrestException catch (e) {
+        // Idempotent replay: if the row already landed (unique violation on
+        // client_request_id), treat as success and drop the queued entry.
+        if (e.code == '23505') {
+          await _box.delete(k);
+          flushed++;
+        } else {
+          failed++;
+        }
       } catch (_) {
         failed++;
       }

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../l10n/app_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth/profiles_provider.dart';
 import '../auth/session_provider.dart';
+import '../members/members_page.dart';
+import '../members/members_provider.dart';
 import '../budgets/budgets_page.dart';
 import '../dashboard/dashboard_page.dart';
 import '../loans/loan_form.dart';
@@ -61,6 +64,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final pages = const [
       DashboardPage(),
       LedgerPage(),
@@ -104,16 +108,22 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: idx,
         onDestinationSelected: (i) => setState(() => idx = i),
-        destinations: const [
+        destinations: [
           NavigationDestination(
-              icon: Icon(Icons.dashboard), label: 'Dashboard'),
+              icon: const Icon(Icons.dashboard),
+              label: l10n?.dashboard ?? 'Dashboard'),
           NavigationDestination(
-              icon: Icon(Icons.table_chart), label: 'Ledger'),
+              icon: const Icon(Icons.table_chart),
+              label: l10n?.ledger ?? 'Ledger'),
           NavigationDestination(
-              icon: Icon(Icons.receipt_long), label: 'Txns'),
+              icon: const Icon(Icons.receipt_long),
+              label: l10n?.transactions ?? 'Transactions'),
           NavigationDestination(
-              icon: Icon(Icons.savings), label: 'Budgets'),
-          NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
+              icon: const Icon(Icons.savings),
+              label: l10n?.budgets ?? 'Budgets'),
+          NavigationDestination(
+              icon: const Icon(Icons.more_horiz),
+              label: l10n?.more ?? 'More'),
         ],
       ),
       floatingActionButton: idx == 1 && canWrite
@@ -137,17 +147,41 @@ class UserMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final email = Supabase.instance.client.auth.currentUser?.email ?? '';
-    return PopupMenuButton(
+    final tenants = ref.watch(myTenantsProvider);
+    return PopupMenuButton<String>(
       icon: const Icon(Icons.account_circle),
-      itemBuilder: (_) => [
-        PopupMenuItem(enabled: false, child: Text(email)),
-        const PopupMenuItem(value: 'out', child: Text('Sign out')),
-      ],
+      itemBuilder: (_) {
+        final items = <PopupMenuEntry<String>>[
+          PopupMenuItem(enabled: false, child: Text(email)),
+        ];
+        final tlist = tenants.asData?.value ?? const [];
+        if (tlist.length > 1) {
+          items.add(const PopupMenuDivider());
+          items.add(const PopupMenuItem(enabled: false, child: Text('Switch organisation')));
+          for (final t in tlist) {
+            items.add(PopupMenuItem(
+              value: 'tenant:${t['tenant_id']}',
+              child: Text('${t['name']} (${t['role']})'),
+            ));
+          }
+        }
+        items.add(const PopupMenuDivider());
+        items.add(const PopupMenuItem(value: 'members', child: Text('Members')));
+        items.add(const PopupMenuItem(value: 'out', child: Text('Sign out')));
+        return items;
+      },
       onSelected: (v) async {
         if (v == 'out') {
           await signOutAndClear();
           ref.invalidate(authStateProvider);
           ref.invalidate(profileProvider);
+        } else if (v == 'members') {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const MembersPage()));
+        } else if (v.startsWith('tenant:')) {
+          final tid = v.substring('tenant:'.length);
+          await Supabase.instance.client.rpc('set_active_tenant', params: {'p_tenant_id': tid});
+          ref.invalidate(profileProvider);
+          ref.invalidate(membersProvider);
         }
       },
     );

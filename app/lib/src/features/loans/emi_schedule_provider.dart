@@ -31,9 +31,11 @@ final emiScheduleProvider = FutureProvider.family<EmiSchedule, String>(
     // Convert stored decimal to percentage for EMI formula
     final annualRatePct = rate * 100;
 
-    // Only reducing_balance loans get an amortization schedule
     final method = loanRes['calculation_method'] as String? ?? 'daily_accrual';
-    if (method != 'reducing_balance' && method != 'emi') {
+    final months = (loanRes['tenure_months'] as num?)?.toInt() ?? 12;
+
+    // Only EMI methods get an amortization schedule
+    if (method != 'reducing_balance' && method != 'flat' && method != 'emi') {
       return EmiSchedule(
         loanId: loanId,
         partyName: partyName,
@@ -49,55 +51,89 @@ final emiScheduleProvider = FutureProvider.family<EmiSchedule, String>(
       );
     }
 
-    // Fetch tenure from emi_schedules or derive from loan
-    // For now, derive tenure: if loan has no explicit tenure, default to 12 months
-    // In a full implementation, tenure would be stored on the loan
-    final months = 12; // Default 12-month tenure for MVP
-
-    // Compute EMI
-    final emiAmount = LoanCalculator.emi(
-      principal: principal,
-      annualRatePct: annualRatePct,
-      months: months,
-    );
-
-    // Build amortization schedule (reducing balance)
     final installments = <EmiInstallment>[];
-    double outstanding = principal;
-    final monthlyRate = annualRatePct / 12 / 100;
-
-    for (int i = 1; i <= months; i++) {
-      final interest = (outstanding * monthlyRate).toDouble().clamp(0.0, emiAmount);
-      final principalDue = emiAmount - interest;
-      final finalPrincipal = principalDue.clamp(0.0, outstanding);
-      final totalDue = emiAmount;
-      final newOutstanding = outstanding - finalPrincipal;
-
-      // Due date: start_date + i months
-      final dueDate = _addMonths(startDate, i);
-
-      // Status: pending (future), overdue (past due date & unpaid)
-      String status;
-      if (dueDate.isBefore(today)) {
-        status = 'overdue';
-      } else {
-        status = 'pending';
+    double emiAmount;
+    if (method == 'flat') {
+      final totalInterest = principal * rate * (months / 12.0);
+      emiAmount = (principal + totalInterest) / months;
+      final principalPart = principal / months;
+      final interestPart = totalInterest / months;
+      for (int i = 1; i <= months; i++) {
+        final dueDate = _addMonths(startDate, i);
+        String status = dueDate.isBefore(today) ? 'overdue' : 'pending';
+        installments.add(EmiInstallment(
+          installmentNo: i,
+          dueDate: dueDate,
+          principalDue: principalPart,
+          interestDue: interestPart,
+          totalDue: emiAmount,
+          status: status,
+        ));
       }
-
-      installments.add(EmiInstallment(
-        installmentNo: i,
-        dueDate: dueDate,
-        principalDue: finalPrincipal,
-        interestDue: interest,
-        totalDue: totalDue,
-        status: status,
-      ));
-
-      outstanding = newOutstanding;
-      if (outstanding <= 0.01) break; // Loan fully paid
+    } else {
+      emiAmount = LoanCalculator.emi(
+        principal: principal,
+        annualRatePct: annualRatePct,
+        months: months,
+      );
+      double outstanding = principal;
+      final monthlyRate = annualRatePct / 12 / 100;
+      for (int i = 1; i <= months; i++) {
+        final interest = (outstanding * monthlyRate).toDouble().clamp(0.0, emiAmount);
+        final principalDue = emiAmount - interest;
+        final finalPrincipal = principalDue.clamp(0.0, outstanding);
+        final totalDue = emiAmount;
+        final newOutstanding = outstanding - finalPrincipal;
+        final dueDate = _addMonths(startDate, i);
+        String status = dueDate.isBefore(today) ? 'overdue' : 'pending';
+        installments.add(EmiInstallment(
+          installmentNo: i,
+          dueDate: dueDate,
+          principalDue: finalPrincipal,
+          interestDue: interest,
+          totalDue: totalDue,
+          status: status,
+        ));
+        outstanding = newOutstanding;
+        if (outstanding <= 0.01) break;
+      }
     }
 
-    final totalPayable = emiAmount * installments.length;
+    // Merge persisted paid status from emi_schedules table.
+    try {
+      final paidRows = await Supabase.instance.client
+          .from('emi_schedules')
+          .select('installment_no, status, paid_date, paid_amount, penalty_amount')
+          .eq('loan_id', loanId)
+          .filter('deleted_at', 'is', null) as List;
+      final paidMap = <int, Map<String, dynamic>>{};
+      for (final r in paidRows) {
+        paidMap[(r['installment_no'] as num).toInt()] =
+            Map<String, dynamic>.from(r);
+      }
+      for (var i = 0; i < installments.length; i++) {
+        final inst = installments[i];
+        final p = paidMap[inst.installmentNo];
+        if (p != null && (p['status']?.toString() == 'paid')) {
+          installments[i] = EmiInstallment(
+            installmentNo: inst.installmentNo,
+            dueDate: inst.dueDate,
+            principalDue: inst.principalDue,
+            interestDue: inst.interestDue,
+            totalDue: inst.totalDue,
+            status: 'paid',
+            paidDate: p['paid_date'] != null
+                ? DateTime.parse(p['paid_date'] as String)
+                : null,
+            paidAmount: (p['paid_amount'] as num?)?.toDouble(),
+          );
+        }
+      }
+    } catch (_) {
+      // Keep computed schedule if DB read fails.
+    }
+
+    final totalPayable = installments.fold<double>(0, (s, e) => s + e.totalDue);
     final totalInterest = totalPayable - principal;
 
     return EmiSchedule(

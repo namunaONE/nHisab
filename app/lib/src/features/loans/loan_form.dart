@@ -8,7 +8,9 @@ import '../parties/parties_provider.dart';
 import 'loans_provider.dart';
 
 class LoanFormDialog extends ConsumerStatefulWidget {
-  const LoanFormDialog({super.key});
+  final String? loanId;
+  const LoanFormDialog({super.key, this.loanId});
+
   @override
   ConsumerState<LoanFormDialog> createState() => _LoanFormDialogState();
 }
@@ -17,14 +19,18 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
   String? partyId;
   final principal = TextEditingController();
   final ratePct = TextEditingController(text: '18');
+  final tenureMonths = TextEditingController(text: '12');
   String rateType = 'annual';
   String method = 'daily_accrual';
   int dayBase = 360;
   String direction = 'receivable';
   String loanType = 'personal';
   DateTime startDate = DateTime.now();
+  DateTime? dueDate;
+  double tdsPct = 0;
   final remarks = TextEditingController();
   bool busy = false;
+  bool loading = false;
   String? error;
   // Per-field inline validation state
   String? partyError;
@@ -36,6 +42,41 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
     super.initState();
     principal.addListener(_validatePrincipal);
     ratePct.addListener(_validateRate);
+    if (widget.loanId != null) {
+      loading = true;
+      _loadLoan();
+    }
+  }
+
+  Future<void> _loadLoan() async {
+    try {
+      final row = await Supabase.instance.client
+          .from('loans')
+          .select('*')
+          .eq('id', widget.loanId!)
+          .maybeSingle();
+      if (row == null) return;
+      setState(() {
+        partyId = row['party_id']?.toString();
+        principal.text = (row['principal_amount'] as num).toString();
+        final r = (row['rate'] as num).toDouble();
+        ratePct.text = (r * 100).toString();
+        rateType = (row['rate_type'] ?? 'annual').toString();
+        method = (row['calculation_method'] ?? 'daily_accrual').toString();
+        dayBase = (row['day_base'] as num?)?.toInt() ?? 360;
+        direction = (row['direction'] ?? 'receivable').toString();
+        loanType = (row['loan_type'] ?? 'personal').toString();
+        startDate = DateTime.parse(row['start_date'] as String);
+        if (row['due_date'] != null) dueDate = DateTime.parse(row['due_date'] as String);
+        tdsPct = (row['tds_pct'] as num?)?.toDouble() ?? 0;
+        final tn = row['tenure_months'] as num?;
+        tenureMonths.text = tn == null ? '12' : tn.toInt().toString();
+        remarks.text = (row['remarks'] ?? '').toString();
+        loading = false;
+      });
+    } catch (e) {
+      setState(() { error = e.toString(); loading = false; });
+    }
   }
 
   @override
@@ -44,6 +85,7 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
     ratePct.removeListener(_validateRate);
     principal.dispose();
     ratePct.dispose();
+    tenureMonths.dispose();
     remarks.dispose();
     super.dispose();
   }
@@ -90,6 +132,7 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
     try {
       // UI accepts % (18), DB stores decimal (0.18)
       final rateDecimal = rPct / 100;
+      final tm = int.tryParse(tenureMonths.text.trim()) ?? 12;
       final data = {
         'party_id': partyId,
         'principal_amount': p,
@@ -100,18 +143,39 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
         'start_date': startDate.toIso8601String().substring(0, 10),
         'direction': direction,
         'loan_type': loanType,
+        'tenure_months': tm,
         'remarks': remarks.text.trim().isEmpty ? null : remarks.text.trim(),
       };
-      final row = await Supabase.instance.client
-          .from('loans')
-          .insert(data)
-          .select('id')
-          .single();
-      await AuditLog.write(
-          table: 'loans',
-          rowId: (row['id'] ?? '').toString(),
-          action: 'insert',
-          newData: data);
+      if (widget.loanId != null) {
+        await Supabase.instance.client.rpc('update_loan_terms', params: {
+          'p_loan_id': widget.loanId,
+          'p_party_id': partyId,
+          'p_principal_amount': p,
+          'p_rate': rateDecimal,
+          'p_rate_type': rateType,
+          'p_calculation_method': method,
+          'p_day_base': dayBase,
+          'p_start_date': startDate.toIso8601String().substring(0, 10),
+          'p_due_date': dueDate?.toIso8601String().substring(0, 10),
+          'p_tenure_days': null,
+          'p_tenure_months': int.tryParse(tenureMonths.text.trim()) ?? 12,
+          'p_loan_type': loanType,
+          'p_direction': direction,
+          'p_tds_pct': tdsPct,
+          'p_remarks': remarks.text.trim().isEmpty ? null : remarks.text.trim(),
+        });
+      } else {
+        final row = await Supabase.instance.client
+            .from('loans')
+            .insert(data)
+            .select('id')
+            .single();
+        await AuditLog.write(
+            table: 'loans',
+            rowId: (row['id'] ?? '').toString(),
+            action: 'insert',
+            newData: data);
+      }
       ref.invalidate(loansProvider);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -123,9 +187,14 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    if (loading) {
+      return const AlertDialog(
+        content: SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+      );
+    }
     final parties = ref.watch(partiesProvider);
     return AlertDialog(
-      title: const Text('Add Loan'),
+      title: Text(widget.loanId != null ? 'Edit Loan' : 'Add Loan'),
       content: SizedBox(
         width: 480,
         child: SingleChildScrollView(
@@ -164,7 +233,7 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
               Row(children: [
                 Expanded(child: DropdownButtonFormField<int>(initialValue: dayBase, items: const [DropdownMenuItem(value: 360, child: Text('360 banker')), DropdownMenuItem(value: 365, child: Text('365 actual'))], onChanged: (v) => setState(() => dayBase = v!))),
                 const SizedBox(width: 8),
-                Expanded(child: DropdownButtonFormField<String>(initialValue: loanType, items: const [DropdownMenuItem(value: 'personal', child: Text('Personal')), DropdownMenuItem(value: 'business', child: Text('Business')), DropdownMenuItem(value: 'home', child: Text('Home')), DropdownMenuItem(value: 'vehicle', child: Text('Vehicle')), DropdownMenuItem(value: 'cash_credit', child: Text('Cash Credit')), DropdownMenuItem(value: 'demand', child: Text('Demand'))], onChanged: (v) => setState(() => loanType = v!))),
+                Expanded(child: TextField(controller: tenureMonths, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Tenure (months)'))),
               ]),
               const SizedBox(height: 12),
               Row(children: [
@@ -183,7 +252,7 @@ class _LoanFormDialogState extends ConsumerState<LoanFormDialog> {
       ),
       actions: [
         TextButton(onPressed: busy ? null : () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Please wait...' : 'Save loan')),
+        FilledButton(onPressed: busy ? null : save, child: Text(busy ? 'Please wait...' : (widget.loanId != null ? 'Update loan' : 'Save loan'))),
       ],
     );
   }

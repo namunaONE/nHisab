@@ -3,11 +3,11 @@
 ## Project
 
 - Name: `nhisab`
-- Ref: `qcbxurqxmnkzgsfpaesz`
+- Ref: `aldbvbpbittvhkecnfpx`
 - Org: Namuna One (`roxuaraiptvmqmnmwcmw`)
 - Region: `ap-south-1` (Mumbai, India)
-- URL: `https://qcbxurqxmnkzgsfpaesz.supabase.co`
-- DB host: `db.qcbxurqxmnkzgsfpaesz.supabase.co`
+- URL: `https://aldbvbpbittvhkecnfpx.supabase.co`
+- DB host: `db.aldbvbpbittvhkecnfpx.supabase.co`
 - Postgres: 17.11 as last verified 2026-10-15. Confirm in the dashboard before
   applying SQL.
 - Plan: free tier as of 2026-10-25. No PITR and no downloadable platform backup.
@@ -37,7 +37,7 @@ Applied to the live project before 2026-10-25:
    default, `handle_new_user()`.
 7. `20261015170000_alert_cron` - entirely commented out; nothing scheduled.
 
-Prepared but **not applied** as of 2026-10-25:
+Applied as of 2026-10-28:
 
 8. `20261025120000_tenant_membership_rls` - invite-only tenancy, membership-based
    `current_tenant_id()`, per-operation RLS, minimum column grants, composite
@@ -45,10 +45,11 @@ Prepared but **not applied** as of 2026-10-25:
    the expand-phase columns needed before payment lockdown.
 9. `20261025121000_payment_rpcs` - `record_payment`, `void_payment`,
    `close_loan`, `nepal_today()`, backfills, and revocation of direct payment
-   writes and anon access.
+   writes and anon access. Applied 2026-10-28; `security_checks.sql` returns
+   `PASS all_checks`.
 
-Apply in that order with the hardened client deployed between steps 8 and 9. See
-`docs/15-runbook.md` for the exact procedure and backup requirement.
+Remaining manual steps: disable public sign-up / enable email confirmation in
+Auth, bootstrap the first owner, deploy alerts Edge + cron, schedule backups.
 
 ## Current Data Model
 

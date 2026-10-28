@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'l10n/app_localizations.dart';
 
 import 'src/core/cache/cache_service.dart';
 import 'src/core/cache/outbox.dart';
@@ -9,9 +11,9 @@ import 'src/features/auth/auth_gate.dart';
 import 'src/features/home/home_shell.dart';
 
 const supaUrl = String.fromEnvironment('SUPABASE_URL',
-    defaultValue: 'https://qcbxurqxmnkzgsfpaesz.supabase.co');
+    defaultValue: 'https://aldbvbpbittvhkecnfpx.supabase.co');
 const supaAnon = String.fromEnvironment('SUPABASE_ANON_KEY',
-    defaultValue: 'sb_publishable_49uKhtmYBJMFdpGyTYWjfg_50pfzrLN');
+    defaultValue: 'sb_publishable_LAdCM3lSdKAenADMUHGZ8Q_j5khG1DY');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +39,16 @@ class NHisabApp extends StatelessWidget {
       title: 'nHisab',
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('ne'),
+      ],
       home: const AuthGate(child: HomeShell()),
     );
   }
