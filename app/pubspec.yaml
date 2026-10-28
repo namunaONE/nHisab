@@ -36,7 +36,7 @@ dependencies:
   supabase_flutter: ^2.9.0
   flutter_riverpod: ^2.6.1
   go_router: ^15.1.1
-  data_table_2: ^2.6.0
+  data_table_2: ^3.0.0
   fl_chart: ^0.69.0
   bikram_sambat: ^1.2.0
   nepali_date_picker: ^8.0.0
